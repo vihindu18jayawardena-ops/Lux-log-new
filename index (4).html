@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e6a5a">
+<meta name="description" content="Lighting survey: sketch rooms, name areas, tap measuring spots, enter lux. JIS Z9110 and OSHA checked automatically, with Word and Excel reports.">
+</head>
+<body>
+<title>LuxLog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script defer src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<style>
+/* Layout: one-screen field app. Top bar → (rooms | drawing stage | readings). On phones the stage takes
+   the whole screen under a slim room bar; tools sit at the bottom within thumb reach. */
+:root{
+  --bg:#edf1ef; --panel:#ffffff; --panel-2:#f5f8f7; --ink:#16221e; --muted:#5a6b65; --line:#d3ddd9;
+  --brand:#0e6a5a; --brand-ink:#ffffff; --brand-soft:#dbeee8;
+  --lux:#d99a06; --lux-soft:#fff2cc;
+  --good:#1f7f4a; --low:#c23838; --high:#a86f00; --none:#7f8e89;
+  --good-bg:#e3f3e9; --low-bg:#fbe8e8; --high-bg:#fbf0d6;
+  --lcd:#d3e2c6; --lcd-ink:#1b2a10;
+  --shadow:0 8px 28px rgba(14,40,33,.14);
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --tap:44px; --r:12px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c1311; --panel:#131d1a; --panel-2:#192521; --ink:#e2ebe7; --muted:#94a69f; --line:#283833;
+  --brand:#38b396; --brand-ink:#04201a; --brand-soft:#16362f; --lux:#f0b52e; --lux-soft:#3a2e10;
+  --good:#52c486; --low:#f07070; --high:#e9b544; --none:#7c8b86;
+  --good-bg:#15301f; --low-bg:#3a1a1a; --high-bg:#382c10; --lcd:#26331f; --lcd-ink:#d6efc4;
+  --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0c1311; --panel:#131d1a; --panel-2:#192521; --ink:#e2ebe7; --muted:#94a69f; --line:#283833;
+  --brand:#38b396; --brand-ink:#04201a; --brand-soft:#16362f; --lux:#f0b52e; --lux-soft:#3a2e10;
+  --good:#52c486; --low:#f07070; --high:#e9b544; --none:#7c8b86;
+  --good-bg:#15301f; --low-bg:#3a1a1a; --high-bg:#382c10; --lcd:#26331f; --lcd-ink:#d6efc4;
+  --shadow:0 8px 28px rgba(0,0,0,.5); color-scheme:dark }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-ui);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{font-size:16px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-height:var(--tap);min-width:0;width:100%}
+textarea{min-height:auto}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.b{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;min-height:var(--tap);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:500;white-space:nowrap}
+.b:hover{background:var(--panel-2)}
+.b.pri{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.b.pri:hover{filter:brightness(1.07)}
+.b.danger{color:var(--low)}
+.b.sm{min-height:36px;padding:6px 11px;font-size:14px}
+.b:disabled{opacity:.5;cursor:default}
+.b svg,.ic svg{width:20px;height:20px;flex:0 0 auto}
+.muted{color:var(--muted);font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;border-radius:99px;padding:2px 9px;border:1px solid transparent;white-space:nowrap;line-height:1.5}
+.pill.Good,.pill.Pass{background:var(--good-bg);color:var(--good);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
+.pill.Low,.pill.Fail{background:var(--low-bg);color:var(--low);border-color:color-mix(in srgb,var(--low) 35%,transparent)}
+.pill.High{background:var(--high-bg);color:var(--high);border-color:color-mix(in srgb,var(--high) 35%,transparent)}
+.pill.none{background:var(--panel-2);color:var(--muted);border-color:var(--line)}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* ---------- app shell ---------- */
+#app{height:100%;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-height:56px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;letter-spacing:.2px}
+.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--brand);display:grid;place-items:center;color:var(--brand-ink)}
+.brand small{display:block;font-weight:500;font-size:12px;color:var(--muted);max-width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tabs{margin-left:auto;display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:3px;gap:2px}
+.tabs button{border:0;background:none;border-radius:8px;padding:7px 14px;cursor:pointer;color:var(--muted);font-weight:600;font-size:14px;min-height:38px}
+.tabs button.on{background:var(--panel);color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.example{display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;background:var(--lux-soft);color:var(--ink);font-size:13.5px;padding:6px 12px;border-bottom:1px solid var(--line)}
+.view{flex:1;min-height:0;display:none}
+.view.on{display:block}
+.view.scroll{overflow:auto}
+.page{max-width:1080px;margin:0 auto;padding-block:18px 40px;padding-inline:16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card h2{margin:0 0 12px;font-size:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+
+/* ---------- survey layout ---------- */
+#v-survey.on{display:grid;grid-template-columns:230px minmax(0,1fr) 340px;height:100%}
+.rooms{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.rooms h3{margin:0;padding:14px 14px 8px;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.roomlist{list-style:none;margin:0;padding:0 10px;display:flex;flex-direction:column;gap:6px;overflow:auto;flex:1}
+.roomlist li{border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px;min-height:var(--tap);background:var(--panel)}
+.roomlist li:hover{background:var(--panel-2)}
+.roomlist li.on{border-color:var(--brand);background:var(--brand-soft)}
+.roomlist .rn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.roomlist .rs{font-size:12px;color:var(--muted)}
+.rooms .add{margin:10px}
+.work{display:flex;flex-direction:column;min-width:0;min-height:0}
+.roombar{display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.roombar input{flex:1.3;font-weight:600}
+.roombar select{flex:1;max-width:280px}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--panel-2);border-radius:99px;padding:4px 10px;font-size:12.5px;white-space:nowrap;color:var(--muted)}
+.chip b{color:var(--ink);font-weight:600}
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#fbfcfb;touch-action:none}
+#sk{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+/* floating controls */
+.float{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:5}
+.rail{left:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;padding:5px;gap:3px}
+.tb{position:relative;border:0;background:none;border-radius:10px;width:50px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--ink);padding:4px}
+.tb:hover{background:var(--panel-2)}
+.tb.on{background:var(--brand);color:var(--brand-ink)}
+.tb.spot.on{background:var(--lux);color:#1b1300}
+.tb svg{width:22px;height:22px}
+.tb small{font-size:10.5px;line-height:1.1;font-weight:600}
+.tb .caret{position:absolute;right:3px;bottom:3px;width:0;height:0;border-left:4px solid transparent;border-top:4px solid currentColor;transform:rotate(-45deg);opacity:.55}
+.tb .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--panel)}
+.viewctl{right:12px;top:12px;display:flex;align-items:center;padding:4px;gap:2px}
+.ic{border:0;background:none;border-radius:9px;width:40px;height:40px;display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+.ic:hover{background:var(--panel-2)}
+.ic:disabled{opacity:.35;cursor:default}
+.ic.on{background:var(--brand);color:var(--brand-ink)}
+.zoomlbl{font-family:var(--f-mono);font-size:12px;min-width:46px;text-align:center;color:var(--muted);cursor:pointer;border:0;background:none;height:40px;border-radius:9px}
+.zoomlbl:hover{background:var(--panel-2)}
+.vsep{width:1px;height:24px;background:var(--line);margin:0 2px}
+.tray{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:8px;width:296px;z-index:8}
+.tray h4{grid-column:1/-1;margin:2px 4px 2px;font-size:11.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.tray .tb{width:auto;min-height:62px}
+.tray .tb small{font-size:11px;font-weight:500}
+.tray .wide{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;padding:2px}
+.tray .wide .b{flex:1}
+.swatch{width:36px;height:36px;border-radius:50%;border:3px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.swatch.on{box-shadow:0 0 0 2px var(--brand)}
+.wbtn{flex:1;height:40px;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;display:grid;place-items:center}
+.wbtn.on{border-color:var(--brand);background:var(--brand-soft)}
+.wbtn i{display:block;width:34px;background:var(--ink);border-radius:3px}
+.menu{display:flex;flex-direction:column;padding:6px;width:260px;z-index:8}
+.menu button{display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:10px;border-radius:9px;cursor:pointer;min-height:var(--tap)}
+.menu button:hover{background:var(--panel-2)}
+.menu button.danger{color:var(--low)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.menu .tog{margin-left:auto;font-size:12px;color:var(--muted)}
+.ctxbar{left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px 6px;max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none}
+.ctxbar .lbl{font-size:13px;color:var(--muted);padding:0 8px;white-space:nowrap}
+.ctxbar .b{border:0;min-height:40px;padding:6px 10px;font-size:13.5px}
+.hint{left:76px;top:12px;padding:7px 12px;font-size:13px;max-width:max(180px,calc(100% - 410px));transition:opacity .3s;pointer-events:none}
+.readchip{left:76px;bottom:16px;display:none;max-width:calc(100% - 72px);white-space:nowrap;overflow:hidden;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:13.5px;font-weight:600}
+.empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100% - 32px));padding:20px;z-index:4;text-align:center}
+.empty h3{margin:0 0 4px;font-size:18px}
+.empty p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.empty .opts{display:grid;gap:8px}
+.empty .opts .b{justify-content:flex-start;padding:12px 14px;text-align:left}
+.empty .opts .b span{display:flex;flex-direction:column;align-items:flex-start}
+.empty .opts .b small{color:var(--muted);font-weight:400;font-size:12.5px}
+
+/* readings panel */
+.readings{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.rhead{padding:12px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rhead h3{margin:0;font-size:15px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 14px 10px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;min-width:0}
+.stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.stat .v{font-size:16px;font-weight:600;white-space:nowrap}
+.std{margin:0 14px 8px;font-size:12.5px;color:var(--muted);background:var(--panel-2);border-radius:9px;padding:7px 9px;border:1px solid var(--line)}
+.splist{list-style:none;margin:0;padding:0 10px 14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:6px}
+.splist li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 10px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:8px 10px;cursor:pointer;background:var(--panel)}
+.splist li:hover,.splist li.hl{border-color:var(--brand);background:var(--panel-2)}
+.sdot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px}
+.splist .loc{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.splist .cat{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.splist .lx{font-family:var(--f-mono);font-weight:600;font-size:16px;text-align:right}
+.splist .pills{grid-column:2/-1;display:flex;gap:5px;flex-wrap:wrap}
+.zones{padding:0 14px 6px;display:flex;flex-direction:column;gap:5px;max-height:34%;overflow:auto;flex:0 0 auto}
+.zones:empty{display:none}
+.zones h4{margin:2px 0 0;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.zrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-left:4px solid var(--zc,var(--brand));border-radius:9px;cursor:pointer;background:var(--panel)}
+.zrow:hover{background:var(--panel-2)}
+.zrow .zn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zrow .zc{font-size:11.5px;color:var(--muted)}
+.zrow .za{font-family:var(--f-mono);font-weight:600}
+.zrow .znote{grid-column:1/-1;font-size:12.5px;background:var(--lux-soft);color:var(--ink);border-radius:7px;padding:4px 8px;white-space:pre-wrap}
+.rempty{padding:10px 14px;color:var(--muted);font-size:13.5px}
+.sheetgrab{display:none}
+
+/* ---------- phones ---------- */
+@media (max-width:899px){
+  .topbar{min-height:50px;padding:6px 10px}
+  .brand small{display:none}
+  .brand .name{display:none}
+  .tabs button{padding:6px 10px;font-size:13.5px}
+  #v-survey.on{display:flex;flex-direction:column}
+  .rooms{border:0;border-bottom:1px solid var(--line);flex-direction:row;align-items:center;flex:0 0 auto}
+  .rooms h3{display:none}
+  .roomlist{flex-direction:row;overflow-x:auto;padding:6px 8px;scrollbar-width:none}
+  .roomlist li{flex:0 0 auto;max-width:180px;min-height:38px;padding:5px 10px}
+  .roomlist .rs{display:none}
+  .rooms .add{margin:0 8px 0 0;min-height:38px;padding:6px 12px}
+  .rooms .add .t{display:none}
+  .work{flex:1}
+  .roombar{padding:6px 8px;gap:6px}
+  .roombar select{max-width:42%}
+  .roombar .chip{display:none}
+  .rail{left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:none;flex-direction:row;justify-content:space-around;padding:4px}
+  .rail .tb{flex:1;width:auto;max-width:64px}
+  .viewctl{right:8px;top:8px;flex-direction:column;padding:3px}
+  .viewctl .zbtn{display:none}
+  .viewctl .vsep{width:24px;height:1px;margin:2px 0}
+  .zoomlbl{min-width:40px;height:32px;font-size:11px}
+  .hint{left:8px;top:58px;max-width:calc(100% - 72px)}
+  .example{padding:4px 10px;font-size:12.5px;gap:8px;flex-wrap:nowrap}
+  .example .long{display:none}
+  .example .b{min-height:32px;padding:4px 10px;font-size:13px}
+  .ctxbar{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  .tray,.menu{left:8px!important;right:8px;top:auto!important;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:auto}
+  .tray{grid-template-columns:repeat(4,1fr)}
+  .readchip{display:flex;left:8px;top:8px;bottom:auto}
+  .readings{position:fixed;left:0;right:0;bottom:0;height:72%;z-index:40;border:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:var(--shadow);transform:translateY(105%);transition:transform .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .readings.open{transform:none}
+  .sheetgrab{display:block;width:44px;height:5px;border-radius:9px;background:var(--line);margin:8px auto 0}
+  .stats{grid-template-columns:repeat(3,1fr)}
+}
+@media (min-width:900px){ .rclose{display:none} }
+#app.focus .topbar,#app.focus .rooms,#app.focus .roombar,#app.focus .example{display:none}
+@media (min-width:900px){ #app.focus #v-survey.on{grid-template-columns:minmax(0,1fr)} #app.focus .readings{display:none} }
+
+/* ---------- dialogs ---------- */
+dialog{border:0;border-radius:18px;padding:0;width:min(460px,94vw);max-height:92vh;overflow:auto;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(6,20,16,.45)}
+@media (max-width:600px){ dialog{margin:auto 0 0;width:100vw;max-width:none;border-radius:20px 20px 0 0;max-height:90vh;padding-bottom:env(safe-area-inset-bottom,0px)} }
+dialog form{padding:16px;display:flex;flex-direction:column;gap:12px}
+.dhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dhead h3{margin:0;font-size:17px;display:flex;align-items:center;gap:10px}
+.actions{position:sticky;bottom:0;display:flex;justify-content:space-between;gap:8px;background:var(--panel);border-top:1px solid var(--line);margin:0 -16px -16px;padding:10px 16px}
+.actions .row{flex-wrap:nowrap}
+.lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:14px;padding:10px 14px 8px;border:1px solid color-mix(in srgb,var(--lcd-ink) 25%,transparent);box-shadow:inset 0 2px 6px rgba(0,0,0,.12)}
+.lcd label{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;opacity:.75;display:flex;justify-content:space-between}
+.lcd input{background:transparent;border:0;color:var(--lcd-ink);font:600 40px/1 var(--f-mono);text-align:right;padding:2px 0;min-height:52px;letter-spacing:1px}
+.lcd input:focus-visible{outline:none}
+.lcd input::placeholder{color:color-mix(in srgb,var(--lcd-ink) 35%,transparent)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chips button{flex:0 0 auto;border:1px solid var(--line);background:var(--panel-2);border-radius:99px;padding:6px 11px;cursor:pointer;font-size:13px}
+.chips button.on,.chips button:hover{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.verdicts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.verdict{border:1.5px solid var(--line);border-radius:12px;padding:9px 11px;background:var(--panel-2)}
+.verdict .vh{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.verdict .vc{font-size:12.5px;margin:2px 0 4px;color:var(--muted)}
+.verdict .vc b{color:var(--ink)}
+.verdict .vr{font-size:19px;font-weight:700}
+.verdict.Good,.verdict.Pass{border-color:var(--good);background:var(--good-bg)} .verdict.Good .vr,.verdict.Pass .vr{color:var(--good)}
+.verdict.Low,.verdict.Fail{border-color:var(--low);background:var(--low-bg)} .verdict.Low .vr,.verdict.Fail .vr{color:var(--low)}
+.verdict.High{border-color:var(--high);background:var(--high-bg)} .verdict.High .vr{color:var(--high)}
+details.adv summary{cursor:pointer;font-size:13.5px;color:var(--brand);font-weight:600;padding:2px 0}
+details.adv[open] summary{margin-bottom:8px}
+
+/* report */
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th,table.t td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:middle}
+table.t th{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;background:var(--panel-2);white-space:nowrap}
+table.t td.n,table.t th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+.repRoom{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.repRoom img{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
+@media (max-width:760px){ .repRoom{grid-template-columns:1fr} .hide-sm{display:none} }
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:100;max-width:90vw;text-align:center}
+.toast.on{opacity:.96}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"><svg width="18" height="18" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.4" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3M4 4l2.1 2.1M13.9 13.9L16 16M16 4l-2.1 2.1M6.1 13.9L4 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+      <div><span class="name">LuxLog</span><small id="facLabel"></small></div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-v="project">Project</button>
+      <button data-v="survey" class="on">Survey</button>
+      <button data-v="report">Report</button>
+    </nav>
+  </header>
+  <div class="example" id="exampleBar" hidden>
+    <span>Example survey<span class="long"> — try the tools, then start your own</span></span>
+    <button class="b sm pri" id="btn-startreal">Start my own survey</button>
+  </div>
+
+  <!-- PROJECT -->
+  <section class="view scroll" id="v-project">
+    <div class="page">
+      <div class="card">
+        <h2>Survey details</h2>
+        <div class="grid2">
+          <label class="f">Facility / site<input id="p-facility" placeholder="e.g. Base Hospital Homagama"></label>
+          <label class="f">Location / address<input id="p-location"></label>
+          <label class="f">Building / area surveyed<input id="p-building" placeholder="e.g. OPD block, ground floor"></label>
+          <label class="f">Survey date<input id="p-date" type="date"></label>
+          <label class="f">Surveyed by<input id="p-auditor"></label>
+          <label class="f">Organisation<input id="p-org" placeholder="e.g. NCPC Sri Lanka"></label>
+          <label class="f">Lux meter (make / model)<input id="p-meter"></label>
+          <label class="f">Measuring height (m)<input id="p-height" type="number" step="0.05" inputmode="decimal" placeholder="0.80"></label>
+          <label class="f">Time / conditions<input id="p-cond" placeholder="e.g. 10:30, daylight excluded"></label>
+        </div>
+        <label class="f" style="margin-top:12px">Notes<textarea id="p-notes" rows="3"></textarea></label>
+      </div>
+      <div class="card">
+        <h2>Saved data</h2>
+        <p class="muted" style="margin-top:0">Your survey saves automatically on this device. Download a backup to continue on another phone or computer.</p>
+        <div class="row">
+          <button class="b" id="btn-backup">Download backup</button>
+          <button class="b" id="btn-restore">Open backup…</button>
+          <input type="file" id="f-restore" accept=".json,application/json" hidden>
+          <button class="b danger" id="btn-new">Start new survey</button>
+        </div>
+      </div>
+      <div class="row"><button class="b pri" data-go="survey">Go to survey →</button></div>
+    </div>
+  </section>
+
+  <!-- SURVEY -->
+  <section class="view on" id="v-survey">
+    <aside class="rooms">
+      <h3>Rooms</h3>
+      <ul class="roomlist" id="roomlist"></ul>
+      <button class="b pri add" id="btn-addroom"><svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span class="t">Add room</span></button>
+    </aside>
+    <div class="work">
+      <div class="roombar" id="roombar">
+        <input id="r-name" placeholder="Room name, e.g. Ward 5" autocomplete="off" aria-label="Room name">
+        <select id="r-cat" aria-label="Room type"></select>
+        <span class="chip" id="areaChip" hidden>Area <b id="areaVal"></b></span>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="sk" aria-label="Room sketch"></canvas>
+        <div class="float rail" id="rail"></div>
+        <div class="float viewctl" id="viewctl">
+          <button class="ic" id="v-undo" title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+          <button class="ic" id="v-redo" title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+          <span class="vsep"></span>
+          <button class="ic zbtn" id="v-zout" title="Zoom out" aria-label="Zoom out"></button>
+          <button class="zoomlbl" id="v-zlbl" title="Fit drawing to screen">100%</button>
+          <button class="ic zbtn" id="v-zin" title="Zoom in" aria-label="Zoom in"></button>
+          <button class="ic" id="v-fit" title="Fit drawing" aria-label="Fit drawing"></button>
+          <button class="ic" id="v-focus" title="Full screen drawing" aria-label="Full screen drawing"></button>
+        </div>
+        <div class="float hint" id="hint" style="opacity:0"></div>
+        <button class="float readchip" id="readchip"></button>
+        <div class="float tray" id="tray" hidden></div>
+        <div class="float menu" id="menu" hidden></div>
+        <div class="float ctxbar" id="ctxbar" hidden></div>
+        <div class="float empty" id="emptyCard" hidden></div>
+      </div>
+    </div>
+    <aside class="readings" id="readings">
+      <div class="sheetgrab"></div>
+      <div class="rhead"><h3>Readings</h3><button class="b sm rclose" id="r-close">Close</button></div>
+      <div class="stats" id="r-stats"></div>
+      <div class="std" id="r-std"></div>
+      <div class="zones" id="zonelist"></div>
+      <ul class="splist" id="splist"></ul>
+    </aside>
+  </section>
+
+  <!-- REPORT -->
+  <section class="view scroll" id="v-report">
+    <div class="page">
+      <div class="card">
+        <h2>Download report</h2>
+        <div class="row">
+          <button class="b pri" id="btn-word">Word report (.docx)</button>
+          <button class="b pri" id="btn-excel">Excel workbook (.xlsx)</button>
+        </div>
+        <p class="muted" style="margin-bottom:0">Each room includes its sketch with numbered spots, readings with JIS Z9110 and OSHA results, and a chart.</p>
+      </div>
+      <div class="card">
+        <h2>Summary</h2>
+        <div class="tablewrap"><table class="t" id="sumtable"></table></div>
+        <img id="sumchart" alt="Average illuminance by room" style="width:100%;margin-top:12px" hidden>
+      </div>
+      <div id="repRooms" style="display:flex;flex-direction:column;gap:14px"></div>
+    </div>
+  </section>
+</div>
+
+<!-- spot entry sheet -->
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <div class="dhead">
+      <h3><span class="sdot" id="dlgNum">1</span><span><span id="dlgTitle">Spot</span><span class="muted" id="dlgZone" style="display:block;font-weight:500;font-size:12.5px"></span></span></h3>
+      <button class="ic" value="cancel" type="submit" aria-label="Close"><svg viewBox="0 0 20 20" width="20" height="20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <label class="f" for="dlgLoc">Where was this reading taken?</label>
+    <input id="dlgLoc" placeholder="e.g. Desk, Bed head, Corridor, Workbench" autocomplete="off" style="margin-top:-8px">
+    <div class="chips" id="dlgChips"></div>
+    <div class="lcd">
+      <label for="dlgLux"><span>Illuminance</span><span>lx</span></label>
+      <input id="dlgLux" type="number" inputmode="decimal" step="any" min="0" placeholder="0">
+    </div>
+    <div class="verdicts">
+      <div class="verdict" id="vJis"><div class="vh">JIS Z9110</div><div class="vc" id="vJisC"></div><div class="vr" id="vJisR">—</div></div>
+      <div class="verdict" id="vOsha"><div class="vh">OSHA 1926.56</div><div class="vc" id="vOshaC"></div><div class="vr" id="vOshaR">—</div></div>
+    </div>
+    <details class="adv" id="dlgAdv">
+      <summary>Change standard or add a note</summary>
+      <div class="grid2">
+        <label class="f">JIS area type<select id="dlgJis"></select></label>
+        <label class="f">OSHA category<select id="dlgOsha"></select></label>
+      </div>
+      <label class="f" style="margin-top:10px">Note<input id="dlgNote" placeholder="optional"></label>
+    </details>
+    <div class="actions">
+      <button class="b danger" value="delete" type="submit" id="dlgDel">Delete</button>
+      <div class="row">
+        <button class="b" value="cancel" type="submit">Cancel</button>
+        <button class="b pri" value="ok" type="submit" id="dlgOk" style="min-width:110px">Save</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- generic in-page dialog (replaces prompt/confirm) -->
+<dialog id="ask">
+  <form method="dialog" id="askForm">
+    <div class="dhead"><h3 id="askTitle"></h3></div>
+    <p class="muted" id="askText" style="margin:0"></p>
+    <div id="askFields" class="grid2"></div>
+    <div class="chips" id="askChips" hidden></div>
+    <div class="std" id="askLive" style="margin:0" hidden></div>
+    <div class="actions">
+      <span></span>
+      <div class="row">
+        <button class="b" value="cancel" type="submit">Cancel</button>
+        <button class="b pri" value="ok" type="submit" id="askOk">OK</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<input type="file" id="f-bg" accept="image/*" hidden>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+/* ===================== STANDARDS ===================== */
+const FC=10.764; // 1 foot-candle = 10.764 lux
+const OSHA={ // OSHA 29 CFR 1926.56, Table D-3 minimum illumination intensities
+  office:{fc:30,n:"Offices, first aid stations, infirmaries"},
+  shop:{fc:10,n:"Plant & shops, equipment rooms, toilets, locker rooms, mess halls"},
+  indoor:{fc:5,n:"Warehouses, corridors, hallways, exitways"},
+  outdoor:{fc:3,n:"General outdoor areas, accessways, loading platforms"}
+};
+const oshaLux=k=>Math.round(OSHA[k].fc*FC);
+// JIS Z9110:2010 recommended maintained illuminance (Em), range and uniformity
+const CATS=[
+  {k:"operating",n:"Operating theatre (general)",em:1000,lo:750,hi:1500,uo:0.7,osha:"office",kw:["operating","operation theatre","theatre","theater","surgery","surgical"," ot "]},
+  {k:"icu",n:"ICU / intensive care",em:750,lo:500,hi:1000,uo:0.7,osha:"office",kw:["icu","intensive","hdu","ccu","nicu","picu"]},
+  {k:"bedhead",n:"Ward — bed head (reading/exam)",em:300,lo:200,hi:500,uo:0.6,osha:"office",kw:["bed head","bedhead","bedside","reading light"]},
+  {k:"exam",n:"Examination / consultation room",em:500,lo:300,hi:750,uo:0.6,osha:"office",kw:["exam","consult","clinic","doctor","dental","eye","etu","emergency","casualty","treatment","dressing","procedure","labour","labor","delivery"]},
+  {k:"pharmacy",n:"Pharmacy / dispensary",em:500,lo:300,hi:750,uo:0.6,osha:"office",kw:["pharmacy","dispens","drug store"]},
+  {k:"lab",n:"Laboratory",em:500,lo:300,hi:750,uo:0.6,osha:"shop",kw:["lab","laboratory","pathology","blood bank"]},
+  {k:"nurse",n:"Nurses' station",em:300,lo:200,hi:500,uo:0.6,osha:"office",kw:["nurse","nursing station","nurses"]},
+  {k:"radiology",n:"Radiology / imaging",em:300,lo:200,hi:500,uo:0.6,osha:"office",kw:["x-ray","xray","x ray","radiolog","ct scan","mri","scan room","ultrasound","imaging"]},
+  {k:"ward",n:"Ward (general lighting)",em:100,lo:75,hi:150,uo:0.4,osha:"office",kw:["ward","patient room","bed","room no"]},
+  {k:"waiting",n:"Waiting area / OPD hall",em:200,lo:150,hi:300,uo:0.4,osha:"indoor",kw:["waiting","opd","lounge","seating"]},
+  {k:"precision",n:"Inspection / precision work",em:1000,lo:750,hi:1500,uo:0.7,osha:"shop",kw:["inspection","precision","qc","quality","sewing","fine assembly","testing bench"]},
+  {k:"drafting",n:"Design / drafting",em:750,lo:500,hi:1000,uo:0.7,osha:"office",kw:["drafting","design room","drawing office"]},
+  {k:"office",n:"Office / work room",em:750,lo:500,hi:1000,uo:0.6,osha:"office",kw:["office","admin","account","hr ","desk","work room","workstation","cabin","manager","director","clerk","records","finance","writing","computer desk","table","filing"]},
+  {k:"meeting",n:"Meeting / conference room",em:500,lo:300,hi:750,uo:0.6,osha:"office",kw:["meeting","conference","board","training","seminar","auditorium","lecture"]},
+  {k:"control",n:"Control room / computer room",em:500,lo:300,hi:750,uo:0.6,osha:"office",kw:["control","server","computer room","it room","scada"]},
+  {k:"classroom",n:"Classroom",em:300,lo:200,hi:500,uo:0.6,osha:"office",kw:["class","school","tuition","whiteboard"]},
+  {k:"library",n:"Library / reading",em:500,lo:300,hi:750,uo:0.6,osha:"office",kw:["library","reading"]},
+  {k:"reception",n:"Reception / front desk",em:300,lo:200,hi:500,uo:0.6,osha:"office",kw:["reception","front desk","counter","registration","cashier","information"]},
+  {k:"kitchen",n:"Kitchen",em:500,lo:300,hi:750,uo:0.6,osha:"shop",kw:["kitchen","cooking","cook","pantry","food prep","prep area","stove","wash area","dish wash","dishwash","scullery","bakery","hot line","fryer","tandoor"]},
+  {k:"canteen",n:"Canteen / dining",em:300,lo:200,hi:500,uo:0.4,osha:"shop",kw:["canteen","dining","cafeteria","restaurant","mess","serving counter","serving area","servery"]},
+  {k:"workshop",n:"Workshop / maintenance",em:500,lo:300,hi:750,uo:0.6,osha:"shop",kw:["workshop","maintenance","repair","carpent","welding","machine shop","fitting","workbench","bench","lathe"]},
+  {k:"production",n:"Production / assembly (general)",em:500,lo:300,hi:750,uo:0.6,osha:"shop",kw:["production","assembly","factory","process","manufactur","line","plant floor","mill","weaving","spinning","withering","rolling","drying","sorting","machine"]},
+  {k:"packing",n:"Packing / dispatch",em:300,lo:200,hi:500,uo:0.6,osha:"shop",kw:["packing","packaging","dispatch","loading bay"]},
+  {k:"plantroom",n:"Plant room / electrical room",em:200,lo:150,hi:300,uo:0.4,osha:"shop",kw:["electrical","panel","switch","generator","boiler","compressor","chiller","pump","plant room","substation","mcc","ups","battery","laundry"]},
+  {k:"toilet",n:"Toilet / washroom",em:200,lo:150,hi:300,uo:0.4,osha:"shop",kw:["toilet","washroom","wash room","bathroom","restroom","lavatory","wc","sluice","shower","sink","basin"]},
+  {k:"locker",n:"Locker / changing room",em:200,lo:150,hi:300,uo:0.4,osha:"shop",kw:["locker","changing","dressing room"]},
+  {k:"hotel",n:"Hotel guest room (general)",em:100,lo:75,hi:150,uo:0.4,osha:"indoor",kw:["guest room","hotel room","suite","bedroom","quarters","dorm","hostel"]},
+  {k:"stairs",n:"Stairs",em:150,lo:100,hi:200,uo:0.4,osha:"indoor",kw:["stair","staircase","landing","steps"]},
+  {k:"corridor",n:"Corridor / passage",em:100,lo:75,hi:150,uo:0.4,osha:"indoor",kw:["corridor","passage","hallway","hall way","lobby","entrance","walkway","lift","doorway","exit"]},
+  {k:"store",n:"Store / warehouse",em:100,lo:75,hi:150,uo:0.4,osha:"indoor",kw:["store","storage","warehouse","godown","stock","archive","aisle","cold room","dry store","record room","shelf","rack"]},
+  {k:"outdoor",n:"Outdoor / parking",em:50,lo:30,hi:75,uo:0.25,osha:"outdoor",kw:["parking","car park","outdoor","yard","road","compound","garden","outside"]},
+  {k:"general",n:"General area (default)",em:300,lo:200,hi:500,uo:0.4,osha:"shop",kw:[]}
+];
+const CATMAP=Object.fromEntries(CATS.map(c=>[c.k,c]));
+function matchCat(text){ const s=" "+(text||"").toLowerCase().replace(/[^a-z0-9\- ]/g," ")+" "; let best=null, bl=0; for(const c of CATS) for(const w of c.kw) if(w.length>bl&&s.includes(w)){ best=c; bl=w.length; } return best||CATMAP.general; }
+const roomCat=r=>(r.cat&&r.cat!=="auto"&&CATMAP[r.cat])?CATMAP[r.cat]:matchCat(r.name);
+/* named shapes act as areas: spots inside take the area's lux level */
+const ZONE_T=new Set(["rect","zone","circle","poly","stamp"]);
+const isZone=s=>ZONE_T.has(s.t)&&(s.t!=="poly"||s.closed)&&!!(s.name&&s.name.trim());
+function zoneCat(s){ if(s.jis&&s.jis!=="auto"&&CATMAP[s.jis]) return CATMAP[s.jis]; if(!s.name) return null; const m=matchCat(s.name); return m.k==="general"?null:m; }
+function inZone(s,p){
+  if(s.t==="rect"||s.t==="zone") return p.x>=s.x&&p.x<=s.x+s.w&&p.y>=s.y&&p.y<=s.y+s.h;
+  if(s.t==="circle"){ const rx=s.w/2, ry=s.h/2; if(rx<=0||ry<=0) return false; return ((p.x-s.x-rx)/rx)**2+((p.y-s.y-ry)/ry)**2<=1; }
+  if(s.t==="poly"){ let c=false; const q=s.pts; for(let i=0,j=q.length-1;i<q.length;j=i++){ const [xi,yi]=q[i],[xj,yj]=q[j]; if(((yi>p.y)!==(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+  if(s.t==="stamp"){ const a=-(s.rot||0)*Math.PI/180, dx=p.x-s.cx, dy=p.y-s.cy; return Math.abs(dx*Math.cos(a)-dy*Math.sin(a))<=s.w/2&&Math.abs(dx*Math.sin(a)+dy*Math.cos(a))<=s.h/2; }
+  return false; }
+const zoneSize=s=>s.t==="poly"?polyArea(s.pts):s.t==="circle"?Math.PI*s.w*s.h/4:s.w*s.h;
+function spotZone(r,p){ let best=null, ba=Infinity; for(const s of r.shapes) if(isZone(s)&&inZone(s,p)){ const a=zoneSize(s); if(a<ba){ ba=a; best=s; } } return best; }
+function spotCatInfo(r,p){
+  if(p.jis&&p.jis!=="auto"&&CATMAP[p.jis]) return {c:CATMAP[p.jis],src:"manual",z:spotZone(r,p)};
+  if(p.loc&&p.loc.trim()){ const m=matchCat(p.loc); if(m.k!=="general") return {c:m,src:"loc",z:spotZone(r,p)}; }
+  const z=spotZone(r,p); if(z){ const zc=zoneCat(z); if(zc) return {c:zc,src:"area",z}; }
+  return {c:roomCat(r),src:"room",z}; }
+const spotLoc=(r,p)=>{ if(p.loc&&p.loc.trim()) return p.loc.trim(); const z=spotZone(r,p); return z?z.name:""; };
+const srcText=i=>i.src==="manual"?"set by you":i.src==="loc"?"from location":i.src==="area"?`from area “${i.z.name}”`:"room type";
+function zoneStats(r){ return r.shapes.filter(isZone).map(z=>{ const c=zoneCat(z)||roomCat(r), pts=r.points.filter(p=>hasLux(p.lux)&&spotZone(r,p)===z), v=pts.map(p=>+p.lux);
+  const avg=v.length?v.reduce((a,b)=>a+b,0)/v.length:null; return {z,c,n:v.length,avg,min:v.length?Math.min(...v):null,rating:rate(avg,c),osha:avg==null?"none":oshaRate(avg,c.osha),auto:!zoneCat(z)}; }); }
+function spotCat(r,p){ return spotCatInfo(r,p).c; }
+function spotCatOld(r,p){ if(p.jis&&p.jis!=="auto"&&CATMAP[p.jis]) return CATMAP[p.jis]; if(p.loc&&p.loc.trim()){ const m=matchCat(p.loc); if(m.k!=="general") return m; } return roomCat(r); }
+const spotOshaKey=(r,p)=>(p.osha&&p.osha!=="auto"&&OSHA[p.osha])?p.osha:spotCat(r,p).osha;
+const hasLux=v=>v!==null&&v!==""&&v!==undefined&&!isNaN(v);
+const rate=(lux,c)=>!hasLux(lux)?"none":(+lux<c.lo?"Low":+lux>c.hi?"High":"Good");
+const oshaRate=(lux,k)=>!hasLux(lux)?"none":(+lux>=oshaLux(k)?"Pass":"Fail");
+function spotEval(r,p){ const c=spotCat(r,p), ok=spotOshaKey(r,p); return {c,ok,jis:rate(p.lux,c),osha:oshaRate(p.lux,ok),omin:oshaLux(ok)}; }
+function roomStats(r){
+  const c=roomCat(r), pts=r.points.filter(p=>hasLux(p.lux)), v=pts.map(p=>+p.lux);
+  const o={c,n:v.length,avg:null,min:null,max:null,uo:null,rating:"none",good:0,low:0,high:0,pass:0,fail:0,area:roomArea(r)};
+  if(!v.length) return o;
+  o.avg=v.reduce((a,b)=>a+b,0)/v.length; o.min=Math.min(...v); o.max=Math.max(...v); o.uo=o.avg>0?o.min/o.avg:0; o.rating=rate(o.avg,c);
+  pts.forEach(p=>{ const e=spotEval(r,p); o[e.jis.toLowerCase()]++; e.osha==="Pass"?o.pass++:o.fail++; });
+  return o;
+}
+const SPOTC={Low:"#c23838",Good:"#1f7f4a",High:"#c08100",none:"#7f8e89"};
+
+/* ===================== STATE ===================== */
+const KEY="luxlog_v4";
+const uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const fmt=(x,d=0)=>x==null||isNaN(x)?"–":Number(x).toLocaleString("en-US",{maximumFractionDigits:d,minimumFractionDigits:d});
+const fm=x=>(Math.round(x*100)/100).toString();
+const newSpot=(x,y,o={})=>({id:uid(),x,y,lux:null,loc:"",jis:"auto",osha:"auto",note:"",...o});
+function fresh(){ return {v:4,project:{date:new Date().toISOString().slice(0,10)},rooms:[],cur:null}; }
+function migrateV3(d){ // grid-unit sketches → metres
+  d.rooms.forEach(r=>{ const s=r.scale||0.5, m=v=>+(v*s).toFixed(3);
+    r.shapes=(r.shapes||[]).map(sh=>{ const o={...sh};
+      if(o.pts) o.pts=o.pts.map(q=>[m(q[0]),m(q[1])]);
+      ["x","y","w","h","x1","y1","x2","y2"].forEach(k=>{ if(k in o) o[k]=m(o[k]); });
+      if(o.t==="text") o.size=0.35; return o; });
+    r.points=(r.points||[]).map(p=>newSpot(m(p.x),m(p.y),{...p,x:m(p.x),y:m(p.y)}));
+    if(r.bg&&typeof r.bg==="string") r.bg={data:r.bg,x:0,y:0,w:40*s,h:28*s};
+    r.grid=s; delete r.scale; });
+  d.v=4; return d;
+}
+function load(){
+  try{ const t=localStorage.getItem(KEY); if(t) return JSON.parse(t); }catch(e){}
+  try{ const t=localStorage.getItem("luxlog_v2"); if(t){ const d=migrateV3(JSON.parse(t)); return d; } }catch(e){}
+  return null;
+}
+let S=load()||makeSample();
+if(S.example&&!S.rooms.some(r=>r.sampleV===2)) S=makeSample();
+let saveT=null;
+function save(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} },300); }
+const cur=()=>S.rooms.find(r=>r.id===S.cur)||null;
+function toast(m,ms=2400){ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),ms); }
+
+function makeSample(){
+  const W={id:uid(),name:"Ward 5",cat:"auto",grid:0.5,bg:null,shapes:[
+    {t:"rect",x:0,y:0,w:10,h:6.5,c:"#24312d",w2:2},
+    {t:"door",x1:1,y1:6.5,x2:2,y2:6.5},
+    {t:"win",x1:2,y1:0,x2:4,y2:0},{t:"win",x1:6,y1:0,x2:8,y2:0},
+    {t:"stamp",k:"bed",cx:1.8,cy:1.25,w:0.9,h:2,rot:0},{t:"stamp",k:"bed",cx:5,cy:1.25,w:0.9,h:2,rot:0},{t:"stamp",k:"bed",cx:8.2,cy:1.25,w:0.9,h:2,rot:0},
+    {t:"stamp",k:"desk",cx:8.2,cy:5.6,w:1.4,h:0.7,rot:0},
+    {t:"lamp",x1:2.5,y1:3.5,x2:3.7,y2:3.5},{t:"lamp",x1:6.3,y1:3.5,x2:7.5,y2:3.5},
+    {t:"text",x:8.2,y:4.8,s:"Nurse station",size:0.32,c:"#24312d"}],
+    points:[newSpot(1.8,0.55,{lux:250,loc:"Bed head"}),newSpot(5,0.55,{lux:140,loc:"Bed head"}),newSpot(8.2,0.55,{lux:210,loc:"Bed head"}),
+      newSpot(3.4,4.2,{lux:95,loc:"Ward floor (general)"}),newSpot(8.2,5.6,{lux:420,loc:"Nurse station"}),newSpot(1.5,5.6,{lux:60,loc:"Ward floor (general)"})]};
+  const O={id:uid(),name:"Admin office",cat:"auto",grid:0.5,bg:null,shapes:[
+    {t:"rect",x:0,y:0,w:6,h:4},{t:"door",x1:5,y1:4,x2:6,y2:4},{t:"win",x1:1,y1:0,x2:3,y2:0},
+    {t:"stamp",k:"desk",cx:1.5,cy:1.3,w:1.4,h:0.7,rot:0},{t:"stamp",k:"desk",cx:4.4,cy:1.3,w:1.4,h:0.7,rot:0},
+    {t:"stamp",k:"rack",cx:1.2,cy:3.5,w:2,h:0.5,rot:0},{t:"stamp",k:"downlight",cx:1.5,cy:2.4,w:0.4,h:0.4,rot:0},{t:"stamp",k:"downlight",cx:4.4,cy:2.4,w:0.4,h:0.4,rot:0}],
+    points:[newSpot(1.5,1.3,{lux:620,loc:"Desk"}),newSpot(4.4,1.3,{lux:450,loc:"Desk"}),newSpot(1.2,3,{lux:380,loc:"Filing area"})]};
+  const K={id:uid(),name:"Main kitchen",cat:"auto",grid:0.5,bg:null,sampleV:2,shapes:[
+    {t:"rect",x:0,y:0,w:12,h:8,c:"#24312d",w2:2},
+    {t:"door",x1:10.5,y1:8,x2:11.5,y2:8},{t:"win",x1:1.5,y1:0,x2:3.5,y2:0},{t:"win",x1:7,y1:0,x2:9,y2:0},
+    {t:"zone",x:0.3,y:0.3,w:5.2,h:3,c:"#c2412d",name:"Cooking area",jis:"auto",note:"1 of 4 tubes above the range not working. Hood lights off during survey."},
+    {t:"zone",x:6,y:0.3,w:5.7,h:3,c:"#2e8a57",name:"Food prep area",jis:"auto"},
+    {t:"zone",x:0,y:3.7,w:12,h:1.3,c:"#2f6fb5",name:"AC corridor",jis:"auto",note:"Air-conditioned link to the dining hall."},
+    {t:"zone",x:0.3,y:5.4,w:4.5,h:2.3,c:"#8a96a0",name:"Wash area",jis:"auto"},
+    {t:"zone",x:8.3,y:5.4,w:3.4,h:2.3,c:"#c98a0b",name:"Dry store",jis:"auto"},
+    {t:"stamp",k:"machine",cx:2,cy:2.3,w:2.4,h:1,rot:0},{t:"stamp",k:"machine",cx:4.3,cy:2.3,w:1.6,h:1,rot:0},
+    {t:"stamp",k:"table",cx:8.8,cy:2.2,w:2.6,h:1,rot:0},{t:"stamp",k:"sink",cx:1.4,cy:7.2,w:0.8,h:0.5,rot:0},{t:"stamp",k:"sink",cx:2.6,cy:7.2,w:0.8,h:0.5,rot:0},
+    {t:"stamp",k:"rack",cx:10,cy:7.3,w:3,h:0.5,rot:0},
+    {t:"lamp",x1:1.8,y1:1.5,x2:3,y2:1.5},{t:"lamp",x1:8.2,y1:1.5,x2:9.4,y2:1.5},{t:"stamp",k:"downlight",cx:3,cy:4.35,w:0.4,h:0.4,rot:0},{t:"stamp",k:"downlight",cx:9,cy:4.35,w:0.4,h:0.4,rot:0}],
+    points:[newSpot(1.6,1.5,{lux:520}),newSpot(4,1.5,{lux:280}),newSpot(8.8,1.4,{lux:640}),newSpot(3,4.6,{lux:140}),newSpot(9,4.6,{lux:55}),newSpot(2,6.3,{lux:230}),newSpot(10,6.3,{lux:90})]};
+  return {v:4,example:true,project:{facility:"Example Hospital",building:"Ward block & kitchen",date:new Date().toISOString().slice(0,10),auditor:"",meter:"Lux meter"},rooms:[K,W,O],cur:K.id};
+}
+// tidy data from older versions
+S.rooms.forEach(r=>{ r.grid=r.grid||0.5; r.shapes=r.shapes||[]; r.points=(r.points||[]).map(p=>({loc:"",jis:"auto",osha:"auto",note:"",...p})); });
+
+/* ===================== ICONS ===================== */
+const I={
+  spot:'<circle cx="10" cy="10" r="6.5" fill="currentColor"/><circle cx="10" cy="10" r="2.4" fill="var(--panel)"/>',
+  select:'<path d="M5 2.5l10.5 6.2-4.7 1.3L8.3 15z" fill="currentColor"/>',
+  draw:'<path d="M3.5 16.5l2.8-.7L15.4 6.7a1.6 1.6 0 0 0 0-2.3l-.8-.8a1.6 1.6 0 0 0-2.3 0L3.2 12.7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  symbols:'<rect x="2.5" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="14.5" cy="6" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 17l3-5 3 5zM12 12h5v5h-5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  erase:'<path d="M4 13.5l7.4-8.4 5 4.6-6.6 7H6.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 17h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  more:'<circle cx="4.5" cy="10" r="1.7" fill="currentColor"/><circle cx="10" cy="10" r="1.7" fill="currentColor"/><circle cx="15.5" cy="10" r="1.7" fill="currentColor"/>',
+  undo:'<path d="M7.5 5L3.5 9l4 4M3.5 9H12a4.5 4.5 0 0 1 0 9H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  redo:'<path d="M12.5 5l4 4-4 4M16.5 9H8a4.5 4.5 0 0 0 0 9h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  zin:'<circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12.8 12.8L17 17M6 8.5h5M8.5 6v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  zout:'<circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12.8 12.8L17 17M6 8.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  fit:'<path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="7" y="7" width="6" height="6" rx="1" fill="currentColor" opacity=".35"/>',
+  focus:'<path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  pan:'<path d="M7 9V4.5a1.3 1.3 0 0 1 2.6 0V9m0-1V3.5a1.3 1.3 0 0 1 2.6 0V9m0-.5V5a1.3 1.3 0 0 1 2.6 0v6.5c0 3.3-2.2 5.5-5.4 5.5-2.2 0-3.6-1-4.7-2.8L3.5 11a1.3 1.3 0 0 1 2.2-1.3L7 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  zone:'<rect x="2.5" y="4" width="15" height="12" rx="1" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/><path d="M5.5 7.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  tag:'<path d="M3 3h7l7 7-7 7-7-7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/>',
+  pen:'<path d="M3 15c2.5-.5 3.5-6 6.5-6s2.5 5 5 4.5 2.5-6 2.5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  wall:'<path d="M3 17L17 3" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>',
+  poly:'<path d="M3 16V5h8v5h6v6z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>',
+  rect:'<rect x="3" y="4" width="14" height="12" fill="none" stroke="currentColor" stroke-width="2.6"/>',
+  circle:'<circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/>',
+  arrow:'<path d="M3 17L16 4M9 4h7v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  dim:'<path d="M3 10h14M3 6v8M17 6v8M5.5 8L3 10l2.5 2M14.5 8l2.5 2-2.5 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  text:'<path d="M4 4.5h12M10 4.5V16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+  door:'<path d="M4 16h4M4 16V6a10 10 0 0 1 10 10" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  win:'<rect x="2" y="7.5" width="16" height="5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2 10h16" stroke="currentColor" stroke-width="1.4"/>',
+  lamp:'<rect x="2" y="7" width="16" height="6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2 7l16 6M18 7L2 13" stroke="currentColor" stroke-width="1.2"/>',
+  downlight:'<circle cx="10" cy="10" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" stroke-width="1.3"/>',
+  bed:'<rect x="5" y="2.5" width="10" height="15" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="7" y="4" width="6" height="3" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 9h10" stroke="currentColor" stroke-width="1.3"/>',
+  desk:'<rect x="2.5" y="5" width="15" height="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.5 14.5h5v2.5h-5z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  table:'<rect x="5" y="6" width="10" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="3.3" r="1.5" fill="currentColor"/><circle cx="10" cy="16.7" r="1.5" fill="currentColor"/><circle cx="2.5" cy="10" r="1.5" fill="currentColor"/><circle cx="17.5" cy="10" r="1.5" fill="currentColor"/>',
+  chair:'<rect x="5.5" y="6" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 4h9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+  column:'<rect x="5" y="5" width="10" height="10" fill="currentColor"/>',
+  rack:'<rect x="2" y="6" width="16" height="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 6v8M10 6v8M14 6v8" stroke="currentColor" stroke-width="1.2"/>',
+  machine:'<rect x="2.5" y="4" width="15" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="5.5" y="7" width="5" height="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="14" cy="10" r="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  stairs:'<rect x="5" y="2.5" width="10" height="15" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 6h10M5 9h10M5 12h10M5 15h10" stroke="currentColor" stroke-width="1.1"/>',
+  ac:'<rect x="2" y="7" width="16" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 11h10" stroke="currentColor" stroke-width="1.2"/>',
+  panel:'<rect x="4" y="6" width="12" height="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M4 14L16 6" stroke="currentColor" stroke-width="1.3"/><path d="M9 7.5l-1.5 3h2.5L8.5 13" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+  wc:'<ellipse cx="10" cy="11.5" rx="4" ry="5" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="5" y="2.5" width="10" height="3" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  sink:'<rect x="4" y="5" width="12" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="10.5" r="1.4" fill="currentColor"/>',
+  photo:'<rect x="2.5" y="4" width="15" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7" cy="8.5" r="1.6" fill="currentColor"/><path d="M3 15l4.5-4 3 2.5 3-3 4 4" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  dup:'<rect x="7" y="7" width="10" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M13 4.5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
+  rot:'<path d="M15.5 9.5A6 6 0 1 1 13 4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M13.5 1.8l.2 3.6-3.5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  flip:'<path d="M10 2.5v15" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/><path d="M7.5 5L3 15h4.5zM12.5 5l4.5 10h-4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  front:'<rect x="3" y="3" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="8" y="8" width="9" height="9" rx="1" fill="currentColor"/>',
+  trash:'<path d="M4 6h12M8 6V4h4v2M5.5 6l1 11h7l1-11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  edit:'<path d="M4 16l1-4 8.5-8.5 3 3L8 15z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  check:'<path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  x:'<path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  all:'<rect x="3" y="3" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/><circle cx="10" cy="10" r="2.5" fill="currentColor"/>',
+  grid:'<path d="M3 3h14v14H3zM3 10h14M10 3v14" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  magnet:'<path d="M5 3v7a5 5 0 0 0 10 0V3h-3.5v7a1.5 1.5 0 0 1-3 0V3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'
+};
+const svg=(k,s=20)=>`<svg viewBox="0 0 20 20" width="${s}" height="${s}" aria-hidden="true">${I[k]}</svg>`;
+
+/* ===================== TOOLS ===================== */
+const DRAW_TOOLS=[["pen","Pen"],["wall","Wall"],["poly","Room walls"],["rect","Room box"],["zone","Named area"],["circle","Circle"],["arrow","Arrow"],["dim","Measure"],["text","Label"]];
+const SYMBOLS=[["door","Door"],["win","Window"],["lamp","Tube light"],["downlight","Downlight"],["ac","AC unit"],["panel","DB panel"],["column","Column"],["bed","Bed"],["desk","Desk"],["table","Table"],["chair","Chair"],["rack","Rack"],["machine","Machine"],["stairs","Stairs"],["wc","WC"],["sink","Sink"]];
+const STAMP_SIZE={downlight:[0.4,0.4],ac:[1,0.3],panel:[0.6,0.25],column:[0.4,0.4],bed:[0.9,2],desk:[1.4,0.7],table:[1.2,0.8],chair:[0.5,0.5],rack:[2,0.5],machine:[2,1.5],stairs:[1.2,3],wc:[0.4,0.65],sink:[0.6,0.45]};
+const LINE_SYM=new Set(["door","win","lamp"]);
+const NAMES=Object.fromEntries([...DRAW_TOOLS,...SYMBOLS,["spot","Lux spot"],["select","Select & move"],["erase","Erase"],["pan","Pan"]]);
+const COLORS=["#24312d","#c2412d","#2f6fb5","#2e8a57","#c98a0b","#8a96a0"];
+let tool="spot", lastDraw="wall", lastSym="door", style={c:"#24312d",w:2}, snapOn=true;
+const HINTS={
+  zone:"Drag to mark an area such as a cooking area or AC corridor. Name it next — spots inside it get that area’s lux level.",
+  spot:"Tap where you measured, then type the lux. Tap a numbered spot to change it.",
+  select:"Tap any shape, then Name & notes to name it and add notes. Named areas set the lux level for spots inside. Drag to move.",
+  pen:"Draw freehand with your finger or mouse.", wall:"Drag to draw a straight wall. Ends snap to other walls.",
+  poly:"Tap each corner of the room. Tap the first corner again to close it.", rect:"Drag from one corner of the room to the opposite corner.",
+  circle:"Drag to draw a circle or oval.", arrow:"Drag to draw an arrow.", dim:"Drag between two points to show a measurement.",
+  text:"Tap where the label should go.", erase:"Tap or drag across items to remove them.", pan:"Drag to move around the drawing.",
+  door:"Drag along the wall where the door is.", win:"Drag along the wall where the window is.", lamp:"Tap to place a tube light, or drag to set its length."
+};
+const toolIcon=t=>I[t]?t:"symbols";
+function railHTML(){
+  const dk=DRAW_TOOLS.some(d=>d[0]===tool)?tool:lastDraw, sk=SYMBOLS.some(d=>d[0]===tool)?tool:lastSym;
+  const b=(k,ic,lbl,on,extra="")=>`<button class="tb ${k==="spot"?"spot":""} ${on?"on":""}" data-act="${k}" title="${lbl}" aria-label="${lbl}" ${extra}>${svg(ic,22)}<small>${lbl}</small>${["draw","symbols","more","style"].includes(k)?'<i class="caret"></i>':""}</button>`;
+  return b("spot","spot","Lux spot",tool==="spot")+b("select","select","Select",tool==="select")+
+    b("draw",dk,"Draw",DRAW_TOOLS.some(d=>d[0]===tool))+b("symbols",sk,"Symbols",SYMBOLS.some(d=>d[0]===tool))+
+    b("erase","erase","Erase",tool==="erase")+
+    `<button class="tb" data-act="style" title="Colour & line" aria-label="Colour and line"><span class="dot" style="background:${style.c};box-shadow:0 0 0 1px var(--line)"></span><small>Style</small><i class="caret"></i></button>`+
+    b("more","more","More",false);
+}
+function renderRail(){ $("#rail").innerHTML=railHTML(); }
+function setTool(t){
+  if(polyDraft&&t!=="poly") finishPoly(false);
+  tool=t; if(DRAW_TOOLS.some(d=>d[0]===t)) lastDraw=t; if(SYMBOLS.some(d=>d[0]===t)) lastSym=t;
+  if(t!=="select") clearSel();
+  closeTray(); renderRail(); showHint(HINTS[t]||(STAMP_SIZE[t]?`Tap to place a ${NAMES[t].toLowerCase()}. Drag to set its size.`:""));
+  hover=null; updateCursor(); renderCtx(); draw();
+}
+let hintT=null;
+function showHint(t,ms=4000){ const h=$("#hint"); if(!t){ h.style.opacity=0; return; } h.textContent=t; h.style.opacity=1; clearTimeout(hintT); if(ms) hintT=setTimeout(()=>h.style.opacity=0,ms); }
+
+/* trays & menus */
+const isPhone=()=>matchMedia("(max-width:899px)").matches;
+function placeFloat(el,anchor){ if(isPhone()){ el.style.left="";el.style.top=""; return; }
+  const st=$("#stage").getBoundingClientRect(), a=anchor.getBoundingClientRect();
+  el.style.left=(a.right-st.left+10)+"px"; el.style.top=Math.max(8,Math.min(st.height-el.offsetHeight-8,a.top-st.top-8))+"px"; }
+function closeTray(){ $("#tray").hidden=true; $("#menu").hidden=true; }
+function openTray(kind,anchor){
+  const tr=$("#tray"), mn=$("#menu"); const wasOpen=(kind==="more"?!mn.hidden:!tr.hidden)&&tr.dataset.k===kind;
+  closeTray(); if(wasOpen) return;
+  if(kind==="more"){ mn.innerHTML=moreMenu(); mn.hidden=false; mn.dataset.k=kind; tr.dataset.k=kind; placeFloat(mn,anchor); return; }
+  tr.dataset.k=kind;
+  if(kind==="draw") tr.innerHTML=`<h4>Draw</h4>`+DRAW_TOOLS.map(([k,n])=>`<button class="tb ${tool===k?"on":""}" data-tool="${k}">${svg(k,22)}<small>${n}</small></button>`).join("");
+  else if(kind==="symbols") tr.innerHTML=`<h4>Doors, windows &amp; lights</h4>`+SYMBOLS.slice(0,6).map(([k,n])=>`<button class="tb ${tool===k?"on":""}" data-tool="${k}">${svg(k,22)}<small>${n}</small></button>`).join("")+
+    `<h4>Furniture &amp; equipment</h4>`+SYMBOLS.slice(6).map(([k,n])=>`<button class="tb ${tool===k?"on":""}" data-tool="${k}">${svg(k,22)}<small>${n}</small></button>`).join("");
+  else if(kind==="style") tr.innerHTML=`<h4>Colour</h4><div class="wide">${COLORS.map(c=>`<button class="swatch ${style.c===c?"on":""}" data-color="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join("")}</div>
+    <h4>Line thickness</h4><div class="wide">${[1,2,3].map(w=>`<button class="wbtn ${style.w===w?"on":""}" data-w="${w}" aria-label="Thickness ${w}"><i style="height:${w*2+1}px"></i></button>`).join("")}</div>
+    <p class="muted" style="grid-column:1/-1;margin:2px 4px">${sel.shapes.size?"Applies to the selected items and new drawing.":"Applies to new drawing. Select items first to change them."}</p>`;
+  tr.hidden=false; placeFloat(tr,anchor);
+}
+function moreMenu(){ const r=cur();
+  return `<button data-m="quick">${svg("rect")}Room box from length × width</button>
+  <button data-m="auto">${svg("grid")}Add a grid of spots</button>
+  <button data-m="photo">${svg("photo")}Floor-plan photo underneath…</button>
+  ${r&&r.bg?`<button data-m="nophoto">${svg("x")}Remove photo</button>`:""}
+  <hr>
+  <button data-m="selall">${svg("all")}Select whole drawing to move</button>
+  <button data-m="snap">${svg("magnet")}Snap to grid &amp; walls<span class="tog">${snapOn?"On":"Off"}</span></button>
+  <button data-m="grid">${svg("grid")}Grid size<span class="tog">${r?r.grid:0.5} m</span></button>
+  <button data-m="pan">${svg("pan")}Pan tool</button>
+  <hr>
+  <button data-m="clear" class="danger">${svg("trash")}Clear drawing</button>
+  <button data-m="delroom" class="danger">${svg("trash")}Delete this room</button>`;
+}
+$("#rail").addEventListener("click",e=>{ const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act;
+  if(a==="draw"){ if(DRAW_TOOLS.some(d=>d[0]===tool)) openTray("draw",b); else { setTool(lastDraw); openTray("draw",$('[data-act="draw"]')); } return; }
+  if(a==="symbols"){ if(SYMBOLS.some(d=>d[0]===tool)) openTray("symbols",b); else { setTool(lastSym); openTray("symbols",$('[data-act="symbols"]')); } return; }
+  if(a==="style"||a==="more"){ openTray(a,b); return; }
+  setTool(a); });
+$("#tray").addEventListener("click",e=>{
+  const t=e.target.closest("[data-tool]"); if(t){ setTool(t.dataset.tool); return; }
+  const c=e.target.closest("[data-color]"), w=e.target.closest("[data-w]");
+  if(c||w){ if(c) style.c=c.dataset.color; if(w) style.w=+w.dataset.w;
+    if(sel.shapes.size){ snapshot(); sel.shapes.forEach(s=>{ if(c) s.c=style.c; if(w) s.w2=style.w; }); save(); }
+    const k=$("#tray").dataset.k; renderRail(); openTray(k,$('[data-act="style"]')); openTray(k,$('[data-act="style"]')); draw(); }
+});
+$("#menu").addEventListener("click",async e=>{ const b=e.target.closest("[data-m]"); if(!b) return; const m=b.dataset.m, r=cur(); closeTray(); if(!r) return;
+  if(m==="quick") quickBox();
+  else if(m==="auto") autoSpots();
+  else if(m==="photo") $("#f-bg").click();
+  else if(m==="nophoto"){ snapshot(); r.bg=null; bgImg=null; save(); draw(); }
+  else if(m==="selall"){ setTool("select"); selectAll(); }
+  else if(m==="snap"){ snapOn=!snapOn; toast(snapOn?"Snapping on":"Snapping off — free drawing"); }
+  else if(m==="grid"){ const v=await ask({title:"Grid size",fields:[{id:"g",label:"One grid square",type:"select",value:String(r.grid),options:[["0.25","0.25 m"],["0.5","0.5 m"],["1","1 m"]]}],ok:"Apply"}); if(v){ r.grid=+v.g; save(); draw(); } }
+  else if(m==="pan") setTool("pan");
+  else if(m==="clear"){ if(await ask({title:"Clear drawing?",text:"This removes everything drawn in this room, including its spots and readings.",ok:"Clear",danger:true})){ snapshot(); r.shapes=[]; r.points=[]; save(); clearSel(); renderAll(); } }
+  else if(m==="delroom") deleteRoom();
+});
+document.addEventListener("pointerdown",e=>{ if(!e.target.closest("#tray,#menu,#rail")) closeTray(); },true);
+
+/* ===================== VIEW & CANVAS ===================== */
+const cv=$("#sk"), ctx=cv.getContext("2d"), stage=$("#stage");
+let V={x:-1,y:-1,z:60}, W=800, H=600, DPR=1, bgImg=null;
+const views={};
+function resize(){ const b=stage.getBoundingClientRect(); W=Math.max(50,b.width); H=Math.max(50,b.height); DPR=window.devicePixelRatio||1;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR); draw(); }
+new ResizeObserver(()=>{ const had=W; resize(); }).observe(stage);
+const toW=(sx,sy)=>({x:V.x+sx/V.z,y:V.y+sy/V.z});
+function evW(e){ const b=cv.getBoundingClientRect(); return toW(e.clientX-b.left,e.clientY-b.top); }
+function setZoomAt(z,sx,sy){ z=Math.max(6,Math.min(500,z)); const p=toW(sx,sy); V.z=z; V.x=p.x-sx/z; V.y=p.y-sy/z; $("#v-zlbl").textContent=Math.round(z/60*100)+"%"; draw(); }
+function contentBounds(r,withBg=true){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity; const add=(x,y)=>{ x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y); };
+  r.shapes.forEach(s=>{ const b=sbox(s); add(b.x0,b.y0); add(b.x1,b.y1); });
+  r.points.forEach(p=>add(p.x,p.y));
+  if(withBg&&r.bg){ add(r.bg.x,r.bg.y); add(r.bg.x+r.bg.w,r.bg.y+r.bg.h); }
+  return x0===Infinity?null:{x0,y0,x1,y1};
+}
+function fitView(r=cur(),pad=56){
+  if(!r) return; const b=contentBounds(r);
+  const top=isPhone()?60:64, bottom=isPhone()?84:24, left=isPhone()?12:80, right=12;
+  const aw=W-left-right, ah=H-top-bottom;
+  if(!b){ V.z=Math.min(aw/10,ah/8,80); V.x=-left/V.z-0.5; V.y=-top/V.z-0.5; }
+  else { const bw=Math.max(b.x1-b.x0,2), bh=Math.max(b.y1-b.y0,2); V.z=Math.max(6,Math.min(400,(aw-pad)/bw,(ah-pad)/bh));
+    V.x=(b.x0+b.x1)/2-(left+aw/2)/V.z; V.y=(b.y0+b.y1)/2-(top+ah/2)/V.z; }
+  $("#v-zlbl").textContent=Math.round(V.z/60*100)+"%"; draw();
+}
+
+/* ===================== GEOMETRY ===================== */
+function sbox(s){
+  if(s.pts){ const xs=s.pts.map(q=>q[0]), ys=s.pts.map(q=>q[1]); return {x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)}; }
+  if("x1" in s) return {x0:Math.min(s.x1,s.x2),y0:Math.min(s.y1,s.y2),x1:Math.max(s.x1,s.x2),y1:Math.max(s.y1,s.y2)};
+  if(s.t==="stamp"){ const sw=(s.rot%180)?s.h:s.w, sh=(s.rot%180)?s.w:s.h; return {x0:s.cx-sw/2,y0:s.cy-sh/2,x1:s.cx+sw/2,y1:s.cy+sh/2}; }
+  if(s.t==="text"){ const w=Math.max(.4,s.s.length*s.size*.55), h=s.size*1.2; return {x0:s.x-w/2,y0:s.y-h/2,x1:s.x+w/2,y1:s.y+h/2}; }
+  return {x0:s.x,y0:s.y,x1:s.x+s.w,y1:s.y+s.h};
+}
+function segDist(p,a,b){ const dx=b.x-a.x,dy=b.y-a.y,L=dx*dx+dy*dy; let t=L?((p.x-a.x)*dx+(p.y-a.y)*dy)/L:0; t=Math.max(0,Math.min(1,t)); return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy)); }
+function polyArea(pts){ let a=0; for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; } return Math.abs(a)/2; }
+function outline(r){ return r.shapes.find(s=>s.t==="rect"||(s.t==="poly"&&s.closed))||null; }
+function roomArea(r){ const o=outline(r); if(!o) return null; return o.t==="rect"?o.w*o.h:polyArea(o.pts); }
+function origin(r){ const o=outline(r); if(!o) return {x:0,y:0}; const b=sbox(o); return {x:b.x0,y:b.y0}; }
+const posM=(r,p)=>{ const o=origin(r); return [+fm(p.x-o.x),+fm(p.y-o.y)]; };
+function translate(dst,src,dx,dy){
+  if(src.pts) dst.pts=src.pts.map(q=>[q[0]+dx,q[1]+dy]);
+  else if("x1" in src){ dst.x1=src.x1+dx; dst.y1=src.y1+dy; dst.x2=src.x2+dx; dst.y2=src.y2+dy; }
+  else if("cx" in src){ dst.cx=src.cx+dx; dst.cy=src.cy+dy; }
+  else { dst.x=src.x+dx; dst.y=src.y+dy; }
+}
+function hitShape(r,p,tolPx=12){
+  const tol=tolPx/V.z;
+  for(let i=r.shapes.length-1;i>=0;i--){ const s=r.shapes[i];
+    if(s.t==="text"||s.t==="stamp"){ if(s.t==="stamp"){ const a=-(s.rot||0)*Math.PI/180, dx=p.x-s.cx, dy=p.y-s.cy, lx=dx*Math.cos(a)-dy*Math.sin(a), ly=dx*Math.sin(a)+dy*Math.cos(a);
+        if(Math.abs(lx)<=s.w/2+tol*.5&&Math.abs(ly)<=s.h/2+tol*.5) return s; }
+      else { const b=sbox(s); if(p.x>=b.x0-tol*.5&&p.x<=b.x1+tol*.5&&p.y>=b.y0-tol*.5&&p.y<=b.y1+tol*.5) return s; } continue; }
+    const lb=labelBoxes.get(s); if(lb&&p.x>=lb.x0&&p.x<=lb.x1&&p.y>=lb.y0&&p.y<=lb.y1) return s;
+    if(s.t==="rect"||s.t==="zone"){ const {x,y,w,h}=s; if([[x,y,x+w,y],[x+w,y,x+w,y+h],[x+w,y+h,x,y+h],[x,y+h,x,y]].some(e=>segDist(p,{x:e[0],y:e[1]},{x:e[2],y:e[3]})<tol)) return s; continue; }
+    if(s.t==="circle"){ const rx=Math.abs(s.w)/2, ry=Math.abs(s.h)/2, cx=s.x+s.w/2, cy=s.y+s.h/2; if(rx<.01||ry<.01) continue;
+      const d=Math.hypot((p.x-cx)/rx,(p.y-cy)/ry); if(Math.abs(d-1)*Math.min(rx,ry)<tol) return s; continue; }
+    if(s.pts){ const pts=s.closed?[...s.pts,s.pts[0]]:s.pts; for(let k=1;k<pts.length;k++) if(segDist(p,{x:pts[k-1][0],y:pts[k-1][1]},{x:pts[k][0],y:pts[k][1]})<tol) return s; continue; }
+    if(segDist(p,{x:s.x1,y:s.y1},{x:s.x2,y:s.y2})<(s.t==="lamp"?tol+0.15:tol)) return s;
+  }
+  return null;
+}
+function hitSpot(r,p,px=16){ const t=px/V.z; for(let i=r.points.length-1;i>=0;i--){ const q=r.points[i]; if(Math.hypot(q.x-p.x,q.y-p.y)<=t) return q; } return null; }
+function endpoints(r,skip){ const e=[]; r.shapes.forEach(s=>{ if(s===skip) return;
+  if(s.t==="rect"){ e.push([s.x,s.y],[s.x+s.w,s.y],[s.x,s.y+s.h],[s.x+s.w,s.y+s.h]); }
+  else if(s.t==="poly") e.push(...s.pts); else if("x1" in s&&s.t!=="dim") e.push([s.x1,s.y1],[s.x2,s.y2]); }); return e; }
+let snapMark=null;
+function snapP(p,skip,step){ snapMark=null; if(!snapOn) return {x:p.x,y:p.y}; const r=cur(), tol=14/V.z;
+  let best=null, bd=tol; for(const q of endpoints(r,skip)){ const d=Math.hypot(q[0]-p.x,q[1]-p.y); if(d<bd){ bd=d; best=q; } }
+  if(polyDraft) for(const q of polyDraft) { const d=Math.hypot(q[0]-p.x,q[1]-p.y); if(d<bd){ bd=d; best=q; } }
+  if(best){ snapMark={x:best[0],y:best[1]}; return {x:best[0],y:best[1]}; }
+  const g=step||r.grid/2; return {x:Math.round(p.x/g)*g,y:Math.round(p.y/g)*g}; }
+function ortho(a,b,force){ const dx=b.x-a.x, dy=b.y-a.y; if(force||snapOn){ if(Math.abs(dx)<Math.abs(dy)*.18||(force&&Math.abs(dx)<Math.abs(dy))) return {x:a.x,y:b.y}; if(Math.abs(dy)<Math.abs(dx)*.18||force) return {x:b.x,y:a.y}; } return b; }
+
+/* ===================== RENDER ===================== */
+function paint(g,r,Vw,w,h,o={}){
+  const ui=o.ui||1, z=Vw.z, X=x=>(x-Vw.x)*z, Y=y=>(y-Vw.y)*z;
+  g.fillStyle="#fbfcfb"; g.fillRect(0,0,w,h);
+  const img=o.bg!==undefined?o.bg:bgImg;
+  if(img&&r.bg){ const b=r.bg, s=Math.min(b.w/img.width,b.h/img.height), iw=img.width*s, ih=img.height*s; g.globalAlpha=.5; g.drawImage(img,X(b.x+(b.w-iw)/2),Y(b.y+(b.h-ih)/2),iw*z,ih*z); g.globalAlpha=1; }
+  // grid
+  let step=r.grid; while(step*z<9) step*=2;
+  const major=step>=1?step*5:1;
+  const gx0=Math.floor(Vw.x/step)*step, gy0=Math.floor(Vw.y/step)*step;
+  g.lineWidth=1;
+  for(let x=gx0;x<=Vw.x+w/z+step;x+=step){ const isM=Math.abs(x/major-Math.round(x/major))<1e-6; g.strokeStyle=isM?"#d2dcd8":"#e9efed"; const sx=Math.round(X(x))+.5; line(g,sx,0,sx,h); }
+  for(let y=gy0;y<=Vw.y+h/z+step;y+=step){ const isM=Math.abs(y/major-Math.round(y/major))<1e-6; g.strokeStyle=isM?"#d2dcd8":"#e9efed"; const sy=Math.round(Y(y))+.5; line(g,0,sy,w,sy); }
+  for(const s of r.shapes) drawShape(g,s,X,Y,z,ui,r,o);
+  if(o.labels) o.labels.clear();
+  for(const s of r.shapes) if(s.t!=="text"&&((s.name&&s.name.trim())||s.note)){ const bx=drawName(g,s,X,Y,ui); if(o.labels&&bx) o.labels.set(s,{x0:Vw.x+bx.x/z,y0:Vw.y+bx.y/z,x1:Vw.x+(bx.x+bx.w)/z,y1:Vw.y+(bx.y+bx.h)/z}); }
+  if(o.preview) { g.save(); g.globalAlpha=.75; drawShape(g,o.preview,X,Y,z,ui,r,{...o,live:true}); g.restore(); }
+  if(o.polyDraft&&o.polyDraft.length){ const pts=[...o.polyDraft]; if(o.polyCursor) pts.push([o.polyCursor.x,o.polyCursor.y]);
+    g.save(); g.strokeStyle=style.c; g.lineWidth=wallPx(style.w)*ui; g.lineJoin="round"; g.lineCap="round"; g.beginPath(); pts.forEach((q,i)=>i?g.lineTo(X(q[0]),Y(q[1])):g.moveTo(X(q[0]),Y(q[1]))); g.stroke();
+    o.polyDraft.forEach((q,i)=>{ g.beginPath(); g.arc(X(q[0]),Y(q[1]),i===0?8:4,0,7); g.fillStyle=i===0?"#0e6a5a":"#fff"; g.fill(); g.strokeStyle="#0e6a5a"; g.lineWidth=2; g.stroke(); });
+    if(o.polyCursor&&o.polyDraft.length){ const l=o.polyDraft.at(-1); lenTag(g,X,Y,{x:l[0],y:l[1]},o.polyCursor,ui); }
+    g.restore(); }
+  // selection
+  if(o.sel&&(o.sel.shapes.size||o.sel.spots.size)){ g.save(); g.strokeStyle="#0e6a5a"; g.lineWidth=1.5; g.setLineDash([6,4]);
+    o.sel.shapes.forEach(s=>{ const b=sbox(s); g.strokeRect(X(b.x0)-5,Y(b.y0)-5,(b.x1-b.x0)*z+10,(b.y1-b.y0)*z+10); });
+    g.setLineDash([]);
+    if(o.sel.shapes.size===1&&!o.sel.spots.size) handles([...o.sel.shapes][0]).forEach(hd=>{ g.fillStyle="#fff"; g.strokeStyle="#0e6a5a"; g.lineWidth=2; g.beginPath(); g.rect(X(hd.x)-6,Y(hd.y)-6,12,12); g.fill(); g.stroke(); });
+    g.restore(); }
+  // spots
+  const R=13*ui;
+  r.points.forEach((p,i)=>{ const x=X(p.x), y=Y(p.y), e=spotEval(r,p), selected=o.sel&&o.sel.spots.has(p), hl=o.hlSpot===p;
+    if(selected||hl){ g.beginPath(); g.arc(x,y,R+6*ui,0,7); g.fillStyle="rgba(14,106,90,.18)"; g.fill(); }
+    g.beginPath(); g.arc(x,y,R,0,7); g.fillStyle=SPOTC[e.jis]; g.fill(); g.lineWidth=2.5*ui; g.strokeStyle="#fff"; g.stroke();
+    if(e.osha==="Fail"){ g.beginPath(); g.arc(x,y,R+3.5*ui,0,7); g.setLineDash([3*ui,3*ui]); g.strokeStyle="#c23838"; g.lineWidth=1.6*ui; g.stroke(); g.setLineDash([]); }
+    g.fillStyle="#fff"; g.font=`700 ${12*ui}px "IBM Plex Sans",system-ui,sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(String(i+1),x,y+.5);
+    const lab=hasLux(p.lux)?fmt(p.lux)+" lx":"?"; g.font=`600 ${12*ui}px "IBM Plex Mono",ui-monospace,monospace`; g.textBaseline="top";
+    const tw=g.measureText(lab).width+10*ui, ty=y+R+4*ui; g.fillStyle="rgba(255,255,255,.93)"; roundRect(g,x-tw/2,ty-1,tw,16*ui,4*ui); g.fill();
+    g.strokeStyle=SPOTC[e.jis]; g.lineWidth=1; g.stroke(); g.fillStyle="#16221e"; g.fillText(lab,x,ty+1.5*ui);
+  });
+  if(o.hover){ const hv=o.hover; g.save(); g.globalAlpha=.55;
+    if(hv.t==="spot"){ g.beginPath(); g.arc(X(hv.x),Y(hv.y),R,0,7); g.fillStyle="#d99a06"; g.fill(); }
+    else { g.beginPath(); g.arc(X(hv.x),Y(hv.y),4,0,7); g.fillStyle="#0e6a5a"; g.fill(); } g.restore(); }
+  if(o.snapMark){ g.save(); g.strokeStyle="#d99a06"; g.lineWidth=2; g.beginPath(); g.arc(X(o.snapMark.x),Y(o.snapMark.y),9,0,7); g.stroke(); g.restore(); }
+  if(o.marquee){ const m=o.marquee; g.save(); g.fillStyle="rgba(14,106,90,.08)"; g.strokeStyle="#0e6a5a"; g.setLineDash([5,4]); g.lineWidth=1.2;
+    const x=X(Math.min(m.x0,m.x1)), y=Y(Math.min(m.y0,m.y1)), ww=Math.abs(m.x1-m.x0)*z, hh=Math.abs(m.y1-m.y0)*z; g.fillRect(x,y,ww,hh); g.strokeRect(x,y,ww,hh); g.restore(); }
+}
+const wallPx=w=>[0,2.5,4.5,7][w||2];
+function line(g,a,b,c,d){ g.beginPath(); g.moveTo(a,b); g.lineTo(c,d); g.stroke(); }
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function lenTag(g,X,Y,a,b,ui){ const L=Math.hypot(b.x-a.x,b.y-a.y); if(L<.05) return; const t=fm(L)+" m";
+  g.save(); g.font=`600 ${12*ui}px "IBM Plex Mono",monospace`; const tw=g.measureText(t).width+12, mx=(X(a.x)+X(b.x))/2, my=(Y(a.y)+Y(b.y))/2-16*ui;
+  g.fillStyle="#0e6a5a"; roundRect(g,mx-tw/2,my-10*ui,tw,20*ui,6); g.fill(); g.fillStyle="#fff"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(t,mx,my); g.restore(); }
+function drawShape(g,s,X,Y,z,ui,r,o){
+  const col=s.c||"#24312d", sw=s.w2||2;
+  g.save(); g.lineCap="round"; g.lineJoin="round";
+  switch(s.t){
+    case "wall": g.strokeStyle=col; g.lineWidth=wallPx(sw)*ui; line(g,X(s.x1),Y(s.y1),X(s.x2),Y(s.y2)); if(o.live) lenTag(g,X,Y,{x:s.x1,y:s.y1},{x:s.x2,y:s.y2},ui); break;
+    case "pen": if(s.pts.length>1){ g.strokeStyle=col; g.lineWidth=[0,1.6,2.8,4.5][sw]*ui; g.beginPath(); s.pts.forEach((q,i)=>i?g.lineTo(X(q[0]),Y(q[1])):g.moveTo(X(q[0]),Y(q[1]))); g.stroke(); } break;
+    case "poly": g.strokeStyle=col; g.lineWidth=wallPx(sw)*ui; g.beginPath(); s.pts.forEach((q,i)=>i?g.lineTo(X(q[0]),Y(q[1])):g.moveTo(X(q[0]),Y(q[1]))); if(s.closed) g.closePath(); g.stroke();
+      if(s.closed&&!o.noDims){ for(let i=0;i<s.pts.length;i++){ const a=s.pts[i], b=s.pts[(i+1)%s.pts.length]; edgeLabel(g,X,Y,a,b,ui,s); } } break;
+    case "rect": { g.strokeStyle=col; g.lineWidth=wallPx(sw)*ui; g.lineJoin="miter"; g.strokeRect(X(s.x),Y(s.y),s.w*z,s.h*z);
+      if(!o.noDims){ g.fillStyle="#5a6b65"; g.font=`500 ${11*ui}px "IBM Plex Mono",monospace`; g.textAlign="center"; g.textBaseline="bottom";
+        g.fillText(fm(Math.abs(s.w))+" m",X(s.x+s.w/2),Y(s.y)-wallPx(sw)*ui/2-3*ui);
+        g.save(); g.translate(X(s.x)-wallPx(sw)*ui/2-4*ui,Y(s.y+s.h/2)); g.rotate(-Math.PI/2); g.fillText(fm(Math.abs(s.h))+" m",0,0); g.restore(); }
+      if(o.live) lenTag(g,X,Y,{x:s.x,y:s.y+s.h},{x:s.x+s.w,y:s.y+s.h},ui); break; }
+    case "zone": { const zc=s.c||"#2f6fb5"; g.fillStyle=zc; g.globalAlpha=.08; g.fillRect(X(s.x),Y(s.y),s.w*z,s.h*z); g.globalAlpha=1;
+      g.strokeStyle=zc; g.lineWidth=1.6*ui; g.setLineDash([7*ui,5*ui]); g.strokeRect(X(s.x),Y(s.y),s.w*z,s.h*z); g.setLineDash([]);
+      if(!s.name&&!o.live){ g.fillStyle=zc; g.font=`italic 500 ${11*ui}px "IBM Plex Sans",sans-serif`; g.textAlign="left"; g.textBaseline="top"; g.fillText("Unnamed area",X(s.x)+6*ui,Y(s.y)+6*ui); } break; }
+    case "circle": g.strokeStyle=col; g.lineWidth=[0,1.6,2.8,4.5][sw]*ui; g.beginPath(); g.ellipse(X(s.x+s.w/2),Y(s.y+s.h/2),Math.abs(s.w)*z/2,Math.abs(s.h)*z/2,0,0,7); g.stroke(); break;
+    case "arrow": { g.strokeStyle=col; g.fillStyle=col; g.lineWidth=[0,1.6,2.6,4][sw]*ui; const x1=X(s.x1),y1=Y(s.y1),x2=X(s.x2),y2=Y(s.y2), a=Math.atan2(y2-y1,x2-x1), hl=(10+sw*3)*ui;
+      line(g,x1,y1,x2-Math.cos(a)*hl*.6,y2-Math.sin(a)*hl*.6); g.beginPath(); g.moveTo(x2,y2); g.lineTo(x2-hl*Math.cos(a-.42),y2-hl*Math.sin(a-.42)); g.lineTo(x2-hl*Math.cos(a+.42),y2-hl*Math.sin(a+.42)); g.closePath(); g.fill(); break; }
+    case "dim": { const x1=X(s.x1),y1=Y(s.y1),x2=X(s.x2),y2=Y(s.y2), a=Math.atan2(y2-y1,x2-x1), n=7*ui, nx=-Math.sin(a)*n, ny=Math.cos(a)*n;
+      g.strokeStyle=s.c&&s.c!=="#24312d"?s.c:"#2f6fb5"; g.lineWidth=1.4*ui; line(g,x1,y1,x2,y2); line(g,x1-nx,y1-ny,x1+nx,y1+ny); line(g,x2-nx,y2-ny,x2+nx,y2+ny);
+      [[x1,y1,a],[x2,y2,a+Math.PI]].forEach(([x,y,b])=>{ g.beginPath(); g.moveTo(x,y); g.lineTo(x+9*ui*Math.cos(b-.35),y+9*ui*Math.sin(b-.35)); g.moveTo(x,y); g.lineTo(x+9*ui*Math.cos(b+.35),y+9*ui*Math.sin(b+.35)); g.stroke(); });
+      const L=fm(Math.hypot(s.x2-s.x1,s.y2-s.y1))+" m"; g.save(); g.translate((x1+x2)/2,(y1+y2)/2); let ang=a; if(ang>Math.PI/2||ang<-Math.PI/2) ang+=Math.PI; g.rotate(ang);
+      g.font=`600 ${12*ui}px "IBM Plex Mono",monospace`; const tw=g.measureText(L).width+8; g.fillStyle="#fbfcfb"; g.fillRect(-tw/2,-18*ui,tw,15*ui); g.fillStyle=g.strokeStyle; g.textAlign="center"; g.textBaseline="bottom"; g.fillText(L,0,-5*ui); g.restore(); break; }
+    case "door": case "win": case "lamp": { const L=Math.hypot(s.x2-s.x1,s.y2-s.y1)*z, a=Math.atan2(s.y2-s.y1,s.x2-s.x1), t=5*ui;
+      g.translate(X(s.x1),Y(s.y1)); g.rotate(a);
+      if(s.t==="door"){ if(s.flip){ g.scale(1,-1); } g.fillStyle="#fbfcfb"; g.fillRect(0,-t,L,2*t); g.strokeStyle="#8a5a2b"; g.lineWidth=1.8*ui; line(g,0,0,0,-L); g.beginPath(); g.arc(0,0,L,-Math.PI/2,0); g.setLineDash([4*ui,3*ui]); g.stroke(); }
+      else if(s.t==="win"){ g.fillStyle="#e3eefb"; g.fillRect(0,-t,L,2*t); g.strokeStyle="#2f6fb5"; g.lineWidth=1.5*ui; g.strokeRect(0,-t,L,2*t); line(g,0,0,L,0); }
+      else { const hh=Math.max(6*ui,0.18*z); g.fillStyle="#fff4d6"; g.fillRect(0,-hh/2,L,hh); g.strokeStyle="#b67d00"; g.lineWidth=1.5*ui; g.strokeRect(0,-hh/2,L,hh); line(g,0,-hh/2,L,hh/2); line(g,0,hh/2,L,-hh/2); }
+      break; }
+    case "stamp": g.translate(X(s.cx),Y(s.cy)); g.rotate((s.rot||0)*Math.PI/180); drawStamp(g,s.k,s.w*z,s.h*z,ui,col); break;
+    case "text": { g.fillStyle=col; g.font=`500 ${Math.max(10,s.size*z)}px "IBM Plex Sans",system-ui,sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(s.s,X(s.x),Y(s.y)); break; }
+  }
+  g.restore();
+}
+function drawName(g,s,X,Y,ui){
+  const b=sbox(s), area=canZone(s), c=area?zoneCat(s):null, t1=(s.name&&s.name.trim())||"Note";
+  const t2=[area&&s.name?(c?`${c.lo}–${c.hi} lx`:"room type"):"",s.note?"✎ note":""].filter(Boolean).join(" · ")||" ";
+  const fs=11.5*ui, pad=6*ui; g.save();
+  g.font=`600 ${fs}px "IBM Plex Sans",system-ui,sans-serif`; const w1=g.measureText(t1).width;
+  g.font=`500 ${fs*.88}px "IBM Plex Mono",ui-monospace,monospace`; const w2=g.measureText(t2).width;
+  const w=Math.max(w1,w2)+pad*2, h=fs*2.55; let x,y;
+  if(s.t==="stamp"){ x=X(s.cx)-w/2; y=Y(b.y1)+4*ui; }
+  else if(s.t==="circle"){ x=X((b.x0+b.x1)/2)-w/2; y=Y(b.y0)+8*ui; }
+  else if(!area){ x=X((b.x0+b.x1)/2)-w/2; y=Y((b.y0+b.y1)/2)+9*ui; }
+  else { const inset=(s.t==="rect"||s.t==="poly"?wallPx(s.w2)*ui/2:0)+5*ui; x=X(b.x0)+inset; y=Y(b.y0)+inset; }
+  const col=s.c&&s.c!=="#24312d"?s.c:"#0e6a5a";
+  g.fillStyle="rgba(255,255,255,.94)"; roundRect(g,x,y,w,h,5*ui); g.fill(); g.strokeStyle=col; g.lineWidth=1.3*ui; g.stroke();
+  g.beginPath(); g.arc(x+pad*.55,y+h/2,0,0,7);
+  g.fillStyle=col; g.textAlign="left"; g.textBaseline="top"; g.font=`600 ${fs}px "IBM Plex Sans",system-ui,sans-serif`; g.fillText(t1,x+pad,y+fs*.3);
+  g.fillStyle="#5a6b65"; g.font=`500 ${fs*.88}px "IBM Plex Mono",ui-monospace,monospace`; g.fillText(t2,x+pad,y+fs*1.38);
+  g.restore(); return {x,y,w,h}; }
+function edgeLabel(g,X,Y,a,b,ui,s){ const L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.4) return; const mx=(X(a[0])+X(b[0]))/2, my=(Y(a[1])+Y(b[1]))/2;
+  // push label outward from the polygon centre
+  const c=s.pts.reduce((m,q)=>[m[0]+q[0]/s.pts.length,m[1]+q[1]/s.pts.length],[0,0]); const vx=mx-X(c[0]), vy=my-Y(c[1]), vl=Math.hypot(vx,vy)||1;
+  g.save(); g.font=`500 ${11*ui}px "IBM Plex Mono",monospace`; g.fillStyle="#5a6b65"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(fm(L)+" m",mx+vx/vl*13*ui,my+vy/vl*13*ui); g.restore(); }
+function drawStamp(g,k,w,h,ui,col){
+  const lw=1.5*ui; g.lineWidth=lw; g.strokeStyle=col; g.fillStyle="#fbfcfb"; const x=-w/2,y=-h/2;
+  const lbl=(t,sz)=>{ g.fillStyle=col; g.font=`600 ${Math.max(8,Math.min(sz||h*.45,w*.32))}px "IBM Plex Sans",sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(t,0,0); };
+  switch(k){
+    case "downlight": { const r=Math.min(w,h)/2; g.beginPath(); g.arc(0,0,r,0,7); g.fillStyle="#fff4d6"; g.fill(); g.strokeStyle="#b67d00"; g.stroke(); line(g,-r*.7,-r*.7,r*.7,r*.7); line(g,r*.7,-r*.7,-r*.7,r*.7); break; }
+    case "bed": g.fillRect(x,y,w,h); roundRect(g,x,y,w,h,Math.min(w,h)*.08); g.stroke(); roundRect(g,x+w*.15,y+h*.05,w*.7,h*.16,w*.08); g.stroke(); line(g,x,y+h*.3,x+w,y+h*.3); break;
+    case "desk": g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); { const cw=Math.min(w*.35,h*.7); g.strokeRect(-cw/2,y+h+2*ui,cw,cw*.7); } break;
+    case "table": { g.fillRect(x,y,w,h); roundRect(g,x,y,w,h,Math.min(w,h)*.12); g.stroke(); const cr=Math.min(w,h)*.16; [[0,y-cr*1.6],[0,-y+cr*1.6],[x-cr*1.6,0],[-x+cr*1.6,0]].forEach(([cx,cy])=>{ g.beginPath(); g.arc(cx,cy,cr,0,7); g.stroke(); }); break; }
+    case "chair": g.fillRect(x,y,w,h); roundRect(g,x,y+h*.2,w,h*.8,w*.12); g.stroke(); g.lineWidth=3*ui; line(g,x+w*.1,y+h*.1,x+w*.9,y+h*.1); break;
+    case "column": g.fillStyle=col; g.fillRect(x,y,w,h); break;
+    case "rack": g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); for(let i=1;i<4;i++) line(g,x+w*i/4,y,x+w*i/4,y+h); break;
+    case "machine": g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); g.strokeRect(x+w*.12,y+h*.18,w*.38,h*.64); g.beginPath(); g.arc(x+w*.75,0,Math.min(w,h)*.14,0,7); g.stroke(); break;
+    case "stairs": g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); { const steps=Math.max(4,Math.min(16,Math.round(h/Math.max(8,ui*10)))); for(let i=1;i<steps;i++) line(g,x,y+h*i/steps,x+w,y+h*i/steps);
+      g.strokeStyle="#2f6fb5"; line(g,0,y+h*.9,0,y+h*.12); line(g,0,y+h*.12,-w*.15,y+h*.24); line(g,0,y+h*.12,w*.15,y+h*.24); } break;
+    case "ac": g.fillStyle="#eef4fb"; g.fillRect(x,y,w,h); roundRect(g,x,y,w,h,Math.min(w,h)*.25); g.strokeStyle="#2f6fb5"; g.stroke(); g.fillStyle="#2f6fb5"; g.font=`700 ${Math.max(8,h*.6)}px "IBM Plex Sans",sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText("AC",0,0); break;
+    case "panel": g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); line(g,x,y+h,x+w,y); g.fillStyle=col; g.font=`700 ${Math.max(8,h*.55)}px "IBM Plex Sans",sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillStyle="#c2412d"; g.fillText("DB",-w*.2,0); break;
+    case "wc": g.fillRect(x,y,w,h); roundRect(g,x,y,w,h*.25,w*.1); g.stroke(); g.beginPath(); g.ellipse(0,y+h*.62,w*.42,h*.36,0,0,7); g.stroke(); break;
+    case "sink": g.fillRect(x,y,w,h); roundRect(g,x,y,w,h,Math.min(w,h)*.25); g.stroke(); g.beginPath(); g.arc(0,0,Math.min(w,h)*.08,0,7); g.fillStyle=col; g.fill(); break;
+  }
+}
+const labelBoxes=new Map();
+let hover=null, preview=null, polyDraft=null, polyCursor=null, marquee=null, hlSpot=null;
+let raf=0;
+function draw(){ if(raf) return; raf=requestAnimationFrame(()=>{ raf=0; const r=cur(); ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(!r){ ctx.fillStyle="#fbfcfb"; ctx.fillRect(0,0,W,H); return; }
+  paint(ctx,r,V,W,H,{labels:labelBoxes,hover,preview,polyDraft,polyCursor,sel,marquee,hlSpot,snapMark:(drag&&drag.mode==="draw")||tool==="poly"||hover?snapMark:null}); }); }
+
+/* ===================== SELECTION & HISTORY ===================== */
+const sel={shapes:new Set(),spots:new Set()};
+function clearSel(){ sel.shapes.clear(); sel.spots.clear(); renderCtx(); }
+function selectAll(){ const r=cur(); if(!r) return; r.shapes.forEach(s=>sel.shapes.add(s)); r.points.forEach(p=>sel.spots.add(p)); renderCtx(); draw(); toast("Whole drawing selected — drag it to move"); }
+let undoStack=[], redoStack=[];
+function snapshot(){ const r=cur(); if(!r) return; undoStack.push(JSON.stringify({shapes:r.shapes,points:r.points,bg:r.bg})); if(undoStack.length>100) undoStack.shift(); redoStack=[]; updUndo(); }
+function restore(str){ const r=cur(), d=JSON.parse(str); r.shapes=d.shapes; r.points=d.points; r.bg=d.bg; clearSel(); save(); renderAll(); }
+function undo(){ const r=cur(); if(!r||!undoStack.length) return; redoStack.push(JSON.stringify({shapes:r.shapes,points:r.points,bg:r.bg})); restore(undoStack.pop()); updUndo(); }
+function redo(){ const r=cur(); if(!r||!redoStack.length) return; undoStack.push(JSON.stringify({shapes:r.shapes,points:r.points,bg:r.bg})); restore(redoStack.pop()); updUndo(); }
+function updUndo(){ $("#v-undo").disabled=!undoStack.length; $("#v-redo").disabled=!redoStack.length; }
+function handles(s){
+  if(["wall","door","win","lamp","arrow","dim"].includes(s.t)) return [{k:"a",x:s.x1,y:s.y1},{k:"b",x:s.x2,y:s.y2}];
+  if(s.t==="rect"||s.t==="circle"||s.t==="zone") return [{k:"nw",x:s.x,y:s.y},{k:"ne",x:s.x+s.w,y:s.y},{k:"sw",x:s.x,y:s.y+s.h},{k:"se",x:s.x+s.w,y:s.y+s.h}];
+  if(s.t==="poly") return s.pts.map((q,i)=>({k:"v"+i,x:q[0],y:q[1]}));
+  if(s.t==="stamp"){ const a=(s.rot||0)*Math.PI/180, c=Math.cos(a), sn=Math.sin(a); return [[1,1],[-1,1],[1,-1],[-1,-1]].map(([u,v],i)=>{ const lx=u*s.w/2, ly=v*s.h/2; return {k:"c"+i,x:s.cx+lx*c-ly*sn,y:s.cy+lx*sn+ly*c}; }); }
+  return [];
+}
+function hitHandle(p){ if(sel.shapes.size!==1||sel.spots.size) return null; const s=[...sel.shapes][0], t=14/V.z; return handles(s).find(h=>Math.hypot(h.x-p.x,h.y-p.y)<=t)||null; }
+function applyHandle(s,o,h,p){
+  if(h.k==="a"){ s.x1=p.x; s.y1=p.y; } else if(h.k==="b"){ s.x2=p.x; s.y2=p.y; }
+  else if(s.t==="rect"||s.t==="circle"||s.t==="zone"){ const fx=h.k.includes("w")?o.x+o.w:o.x, fy=h.k.includes("n")?o.y+o.h:o.y; s.x=Math.min(fx,p.x); s.y=Math.min(fy,p.y); s.w=Math.max(.1,Math.abs(p.x-fx)); s.h=Math.max(.1,Math.abs(p.y-fy)); }
+  else if(s.t==="poly"){ const i=+h.k.slice(1); s.pts[i]=[p.x,p.y]; }
+  else if(s.t==="stamp"){ const a=-(s.rot||0)*Math.PI/180, dx=p.x-s.cx, dy=p.y-s.cy; s.w=Math.max(.1,2*Math.abs(dx*Math.cos(a)-dy*Math.sin(a))); s.h=Math.max(.1,2*Math.abs(dx*Math.sin(a)+dy*Math.cos(a))); }
+}
+function selBox(){ let b=null; const add=(x0,y0,x1,y1)=>{ b=b?{x0:Math.min(b.x0,x0),y0:Math.min(b.y0,y0),x1:Math.max(b.x1,x1),y1:Math.max(b.y1,y1)}:{x0,y0,x1,y1}; };
+  sel.shapes.forEach(s=>{ const q=sbox(s); add(q.x0,q.y0,q.x1,q.y1); }); sel.spots.forEach(p=>add(p.x,p.y,p.x,p.y)); return b; }
+function rotateSel(){ const b=selBox(); if(!b) return; snapshot(); const cx=(b.x0+b.x1)/2, cy=(b.y0+b.y1)/2, R=(x,y)=>[cx-(y-cy),cy+(x-cx)];
+  sel.shapes.forEach(s=>{ if(s.pts) s.pts=s.pts.map(q=>R(q[0],q[1]));
+    else if("x1" in s){ [s.x1,s.y1]=R(s.x1,s.y1); [s.x2,s.y2]=R(s.x2,s.y2); }
+    else if(s.t==="stamp"){ [s.cx,s.cy]=R(s.cx,s.cy); s.rot=((s.rot||0)+90)%360; }
+    else if(s.t==="text"){ [s.x,s.y]=R(s.x,s.y); }
+    else { const a=R(s.x,s.y), c=R(s.x+s.w,s.y+s.h); s.x=Math.min(a[0],c[0]); s.y=Math.min(a[1],c[1]); s.w=Math.abs(c[0]-a[0]); s.h=Math.abs(c[1]-a[1]); } });
+  sel.spots.forEach(p=>{ [p.x,p.y]=R(p.x,p.y); }); save(); renderAll(); }
+function dupSel(){ const r=cur(); snapshot(); const ns=new Set(), np=new Set();
+  sel.shapes.forEach(s=>{ const c=JSON.parse(JSON.stringify(s)); translate(c,s,.5,.5); r.shapes.push(c); ns.add(c); });
+  sel.spots.forEach(p=>{ const c=newSpot(p.x+.5,p.y+.5,{loc:p.loc,jis:p.jis,osha:p.osha}); r.points.push(c); np.add(c); });
+  sel.shapes=ns; sel.spots=np; save(); renderAll(); toast("Copied — drag the copy into place"); }
+function delSel(){ const r=cur(); if(!sel.shapes.size&&!sel.spots.size) return; snapshot(); r.shapes=r.shapes.filter(s=>!sel.shapes.has(s)); r.points=r.points.filter(p=>!sel.spots.has(p)); clearSel(); save(); renderAll(); }
+function frontSel(){ const r=cur(); snapshot(); r.shapes=[...r.shapes.filter(s=>!sel.shapes.has(s)),...r.shapes.filter(s=>sel.shapes.has(s))]; save(); draw(); }
+function renderCtx(){
+  const bar=$("#ctxbar"); const n=sel.shapes.size+sel.spots.size;
+  if(tool==="poly"&&polyDraft){ bar.innerHTML=`<span class="lbl">${polyDraft.length} corner${polyDraft.length===1?"":"s"}</span><button class="b" data-c="polyopen">${svg("check")}Finish</button><button class="b" data-c="polyclose">${svg("poly")}Close room</button><button class="b" data-c="polycancel">${svg("x")}Cancel</button>`; bar.hidden=false; return; }
+  if(tool!=="select"){ bar.hidden=true; return; }
+  if(!n){ bar.innerHTML=`<span class="lbl">Tap an item, or drag around several</span><button class="b" data-c="all">${svg("all")}Select all</button>`; bar.hidden=false; return; }
+  const one=n===1?([...sel.shapes][0]||null):null, spot=n===1&&sel.spots.size?[...sel.spots][0]:null;
+  bar.innerHTML=`<span class="lbl">${n} selected</span>`+
+    (spot?`<button class="b" data-c="spot">${svg("edit")}Reading</button>`:"")+
+    (one&&one.t==="text"?`<button class="b" data-c="text">${svg("edit")}Edit</button>`:"")+
+    (one&&one.t!=="text"?`<button class="b" data-c="name">${svg("tag")}Name &amp; notes</button>`:"")+
+    (one&&one.t==="door"?`<button class="b" data-c="flip">${svg("flip")}Flip</button>`:"")+
+    `<button class="b" data-c="rot">${svg("rot")}Rotate</button><button class="b" data-c="dup">${svg("dup")}Copy</button>`+
+    (sel.shapes.size?`<button class="b" data-c="front">${svg("front")}Front</button>`:"")+
+    `<button class="b danger" data-c="del">${svg("trash")}Delete</button>`;
+  bar.hidden=false;
+}
+$("#ctxbar").addEventListener("click",async e=>{ const b=e.target.closest("[data-c]"); if(!b) return; const c=b.dataset.c, r=cur();
+  if(c==="all") selectAll(); else if(c==="rot") rotateSel(); else if(c==="dup") dupSel(); else if(c==="del") delSel(); else if(c==="front") frontSel();
+  else if(c==="flip"){ const s=[...sel.shapes][0]; snapshot(); s.flip=!s.flip; save(); draw(); }
+  else if(c==="text") editText([...sel.shapes][0]);
+  else if(c==="name") nameShape([...sel.shapes][0],false);
+  else if(c==="spot") openSpot(r.points.indexOf([...sel.spots][0]),false);
+  else if(c==="polyopen") finishPoly(false,true); else if(c==="polyclose") finishPoly(true); else if(c==="polycancel"){ polyDraft=null; polyCursor=null; renderCtx(); draw(); }
+});
+
+/* ===================== POINTER INPUT ===================== */
+let drag=null; const touches=new Map(); let gesture=null, ignoreTouch=false, spaceDown=false;
+const tdist=()=>{ const [a,b]=[...touches.values()]; return Math.hypot(a.x-b.x,a.y-b.y); };
+const tmid=()=>{ const [a,b]=[...touches.values()], c=cv.getBoundingClientRect(); return {x:(a.x+b.x)/2-c.left,y:(a.y+b.y)/2-c.top}; };
+function cancelDrag(){ if(!drag) return; if(drag.snap&&drag.started){ restore(undoStack.pop()); updUndo(); } drag=null; preview=null; marquee=null; draw(); }
+function updateCursor(){ cv.style.cursor=tool==="pan"||spaceDown?"grab":tool==="select"?"default":"crosshair"; }
+cv.addEventListener("pointerdown",e=>{
+  const r=cur(); if(!r) return;
+  if(e.pointerType==="touch"){ touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touches.size===2){ e.preventDefault(); cancelDrag(); ignoreTouch=true; gesture={d0:tdist(),z0:V.z,m:tmid()}; return; }
+    if(touches.size>2||ignoreTouch) return; }
+  if(e.pointerType==="mouse"&&e.button!==0&&e.button!==1) return;
+  e.preventDefault(); cv.setPointerCapture(e.pointerId); closeTray();
+  const p=evW(e);
+  if(e.button===1||spaceDown||tool==="pan"){ drag={mode:"pan",sx:e.clientX,sy:e.clientY,vx:V.x,vy:V.y}; cv.style.cursor="grabbing"; return; }
+  const touch=e.pointerType==="touch";
+  switch(tool){
+    case "spot": { const h=hitSpot(r,p,touch?22:16); drag=h?{mode:"tapSpot",spot:h,sx:e.clientX,sy:e.clientY}:{mode:"newSpot",p,sx:e.clientX,sy:e.clientY}; return; }
+    case "select": {
+      const hd=hitHandle(p); if(hd){ const s=[...sel.shapes][0]; drag={mode:"handle",h:hd,s,orig:JSON.parse(JSON.stringify(s)),snap:true}; return; }
+      const sp=hitSpot(r,p,touch?22:16), sh=sp?null:hitShape(r,p,touch?18:12);
+      if(sp||sh){ const set=sp?sel.spots:sel.shapes, it=sp||sh;
+        if(e.shiftKey){ set.has(it)?set.delete(it):set.add(it); }
+        else if(!set.has(it)){ clearSel(); set.add(it); }
+        renderCtx(); draw();
+        const orig=new Map(); sel.shapes.forEach(s=>orig.set(s,JSON.parse(JSON.stringify(s)))); sel.spots.forEach(q=>orig.set(q,{x:q.x,y:q.y}));
+        drag={mode:"move",start:p,orig,moved:false,tapSpot:sp,snap:true,sx:e.clientX,sy:e.clientY}; return; }
+      const zin=[...r.shapes].filter(s=>s.t==="zone"&&inZone(s,p)).sort((a,b)=>zoneSize(a)-zoneSize(b))[0];
+      if(zin){ if(!e.shiftKey) clearSel(); sel.shapes.add(zin); renderCtx(); draw(); const orig=new Map([[zin,JSON.parse(JSON.stringify(zin))]]); drag={mode:"move",start:p,orig,moved:false,snap:true,sx:e.clientX,sy:e.clientY}; return; }
+      if(!e.shiftKey) clearSel(); drag={mode:"marquee",start:p}; marquee={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; draw(); return; }
+    case "erase": snapshot(); drag={mode:"erase",any:false}; eraseAt(p,touch); return;
+    case "poly": drag={mode:"polyTap",p:snapP(p),sx:e.clientX,sy:e.clientY}; return;
+    case "text": drag={mode:"textTap",p:snapP(p)}; return;
+    case "pen": drag={mode:"pen"}; preview={t:"pen",pts:[[p.x,p.y]],c:style.c,w2:style.w}; draw(); return;
+  }
+  const s0=snapP(p); drag={mode:"draw",start:s0}; preview=makeShape(tool,s0,s0); draw();
+});
+function makeShape(t,a,b,shift){
+  if(t==="rect"||t==="circle") return {t,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y),c:style.c,w2:style.w};
+  if(t==="zone") return {t,x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y),c:style.c==="#24312d"?"#2f6fb5":style.c,w2:1};
+  if(STAMP_SIZE[t]){ const d=STAMP_SIZE[t], w=Math.abs(b.x-a.x), h=Math.abs(b.y-a.y); return (w<.15&&h<.15)?{t:"stamp",k:t,cx:a.x,cy:a.y,w:d[0],h:d[1],rot:0,c:style.c}:{t:"stamp",k:t,cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,w:Math.max(.1,w),h:Math.max(.1,h),rot:0,c:style.c}; }
+  let e=b; if(["wall","door","win","lamp","dim"].includes(t)) e=ortho(a,b,shift); if(t==="lamp"&&!shift) e=ortho(a,b,false);
+  return {t,x1:a.x,y1:a.y,x2:e.x,y2:e.y,c:style.c,w2:style.w};
+}
+cv.addEventListener("pointermove",e=>{
+  if(e.pointerType==="touch"&&touches.has(e.pointerId)){ touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(gesture&&touches.size===2){ const m=tmid(); const pw=toW(gesture.m.x,gesture.m.y); V.z=Math.max(6,Math.min(500,gesture.z0*tdist()/gesture.d0)); V.x=pw.x-m.x/V.z; V.y=pw.y-m.y/V.z; gesture.m=m; gesture.z0=V.z; gesture.d0=tdist(); $("#v-zlbl").textContent=Math.round(V.z/60*100)+"%"; draw(); return; }
+    if(ignoreTouch) return; }
+  const r=cur(); if(!r) return; const p=evW(e);
+  if(!drag){
+    if(e.pointerType!=="touch"){
+      if(tool==="spot") hover={t:"spot",x:p.x,y:p.y};
+      else if(tool==="poly"){ polyCursor=polyDraft?snapP(p):null; hover={t:"dot",...snapP(p)}; }
+      else if(tool!=="select"&&tool!=="erase"&&tool!=="pan") hover={t:"dot",...(tool==="pen"?p:snapP(p))};
+      else { hover=null; if(tool==="select"){ const hd=hitHandle(p); cv.style.cursor=hd?"nwse-resize":(hitSpot(r,p)||hitShape(r,p))?"move":"default"; } }
+      draw(); }
+    return; }
+  switch(drag.mode){
+    case "pan": V.x=drag.vx-(e.clientX-drag.sx)/V.z; V.y=drag.vy-(e.clientY-drag.sy)/V.z; draw(); return;
+    case "erase": eraseAt(p,e.pointerType==="touch"); return;
+    case "pen": { const pts=preview.pts, evs=e.getCoalescedEvents?e.getCoalescedEvents():[]; for(const ev of (evs.length?evs:[e])){ const q=evW(ev), l=pts.at(-1); if(Math.hypot(q.x-l[0],q.y-l[1])*V.z>1.5) pts.push([+q.x.toFixed(3),+q.y.toFixed(3)]); } draw(); return; }
+    case "draw": preview=makeShape(tool,drag.start,snapP(p,null),e.shiftKey); draw(); return;
+    case "polyTap": if(e.pointerType!=="touch"){ polyCursor=snapP(p); draw(); } return;
+    case "newSpot": case "tapSpot": if(Math.hypot(e.clientX-(drag.sx??e.clientX),e.clientY-(drag.sy??e.clientY))>10){ drag={mode:"pan",sx:e.clientX,sy:e.clientY,vx:V.x,vy:V.y}; } return;
+    case "marquee": marquee.x1=p.x; marquee.y1=p.y; draw(); return;
+    case "handle": { if(!drag.started){ snapshot(); drag.started=true; } const q=snapP(p,drag.s); Object.assign(drag.s,JSON.parse(JSON.stringify(drag.orig))); applyHandle(drag.s,drag.orig,drag.h,q); draw(); return; }
+    case "move": { const dpx=Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy); if(!drag.moved&&dpx<6) return;
+      if(!drag.moved){ drag.moved=true; snapshot(); drag.started=true; }
+      let dx=p.x-drag.start.x, dy=p.y-drag.start.y; if(snapOn&&sel.shapes.size){ const g=r.grid/2; dx=Math.round(dx/g)*g; dy=Math.round(dy/g)*g; }
+      drag.orig.forEach((o,it)=>{ if(sel.spots.has(it)){ it.x=o.x+dx; it.y=o.y+dy; } else translate(it,o,dx,dy); }); draw(); return; }
+  }
+});
+cv.addEventListener("pointerleave",()=>{ if(!drag&&(hover||polyCursor)){ hover=null; draw(); } });
+function touchEnd(e){ if(e.pointerType!=="touch") return false; touches.delete(e.pointerId); if(touches.size<2) gesture=null; if(ignoreTouch){ if(!touches.size) ignoreTouch=false; return true; } return false; }
+cv.addEventListener("pointerup",e=>{ if(touchEnd(e)) return; endDrag(e); });
+cv.addEventListener("pointercancel",e=>{ touchEnd(e); cancelDrag(); });
+async function endDrag(e){
+  const r=cur(), d=drag; drag=null; if(!d||!r) return; updateCursor();
+  switch(d.mode){
+    case "pan": return;
+    case "tapSpot": openSpot(r.points.indexOf(d.spot),false); return;
+    case "newSpot": { snapshot(); const last=r.points.at(-1); const zp=spotZone(r,d.p); const sp=newSpot(+d.p.x.toFixed(3),+d.p.y.toFixed(3),{loc:zp?"":(last&&!spotZone(r,last)?last.loc:"")}); r.points.push(sp); save(); renderAll(); openSpot(r.points.length-1,true); return; }
+    case "erase": if(!d.any){ undoStack.pop(); updUndo(); } else { save(); renderAll(); } return;
+    case "marquee": { const m=marquee; marquee=null; const x0=Math.min(m.x0,m.x1),x1=Math.max(m.x0,m.x1),y0=Math.min(m.y0,m.y1),y1=Math.max(m.y0,m.y1);
+      if((x1-x0)*V.z>4||(y1-y0)*V.z>4){ r.shapes.forEach(s=>{ const b=sbox(s); if(b.x0<=x1&&b.x1>=x0&&b.y0<=y1&&b.y1>=y0) sel.shapes.add(s); }); r.points.forEach(p=>{ if(p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1) sel.spots.add(p); }); }
+      renderCtx(); draw(); return; }
+    case "handle": if(d.started){ save(); renderAll(); } return;
+    case "move": if(d.moved){ save(); renderAll(); } else if(d.tapSpot&&sel.spots.size===1&&!sel.shapes.size){ openSpot(r.points.indexOf(d.tapSpot),false); } return;
+    case "pen": { const p=preview; preview=null; if(p.pts.length>1){ snapshot(); p.pts=simplify(p.pts,.6/V.z); r.shapes.push(p); save(); renderAll(); } else draw(); return; }
+    case "textTap": { const v=await ask({title:"Add a label",fields:[{id:"s",label:"Text",placeholder:"e.g. Bed 1, Desk, Machine"},{id:"size",label:"Size",type:"select",value:"0.35",options:[["0.25","Small"],["0.35","Medium"],["0.55","Large"]]}],ok:"Add"});
+      if(v&&v.s.trim()){ snapshot(); r.shapes.push({t:"text",x:d.p.x,y:d.p.y,s:v.s.trim().slice(0,60),size:+v.size,c:style.c}); save(); renderAll(); } return; }
+    case "polyTap": { const p=d.p;
+      if(!polyDraft){ polyDraft=[[p.x,p.y]]; renderCtx(); showHint("Tap the next corner. Tap the first corner to close the room.",0); draw(); return; }
+      const f=polyDraft[0], l=polyDraft.at(-1), tol=16/V.z;
+      if(polyDraft.length>=3&&Math.hypot(f[0]-p.x,f[1]-p.y)<tol){ finishPoly(true); return; }
+      if(Math.hypot(l[0]-p.x,l[1]-p.y)<tol){ if(polyDraft.length>=2) finishPoly(false,true); return; }
+      const q=ortho({x:l[0],y:l[1]},p,false); polyDraft.push([q.x,q.y]); renderCtx(); draw(); return; }
+    case "draw": { const p=preview; preview=null; const tiny=s=>Math.hypot((s.x2??0)-(s.x1??0),(s.y2??0)-(s.y1??0))<.2;
+      if(!p){ draw(); return; }
+      if(p.t==="stamp"){ snapshot(); r.shapes.push(p); save(); renderAll(); return; }
+      if(p.t==="lamp"&&tiny(p)){ p.x2=p.x1+1.2; p.y2=p.y1; }
+      else if(p.t==="door"&&tiny(p)){ p.x2=p.x1+0.9; p.y2=p.y1; }
+      else if(p.t==="win"&&tiny(p)){ p.x2=p.x1+1.2; p.y2=p.y1; }
+      else if((p.t==="rect"||p.t==="circle"||p.t==="zone")&&(p.w<.2||p.h<.2)){ draw(); return; }
+      else if("x1" in p&&tiny(p)){ draw(); return; }
+      snapshot(); r.shapes.push(p); save(); renderAll(); if(p.t==="zone") nameShape(p,true); return; }
+  }
+}
+function finishPoly(closed,keepOpen){ const r=cur(); if(!polyDraft){ return; }
+  if(polyDraft.length>=2&&(closed?polyDraft.length>=3:keepOpen)){ snapshot(); r.shapes.push({t:"poly",pts:polyDraft,closed:!!closed,c:style.c,w2:style.w}); save(); }
+  polyDraft=null; polyCursor=null; showHint(closed?"Room drawn. Now choose Lux spot and tap where you measured.":""); renderAll(); }
+function eraseAt(p,touch){ const r=cur(); const sp=hitSpot(r,p,touch?20:14); if(sp){ r.points=r.points.filter(q=>q!==sp); drag.any=true; draw(); return; }
+  const sh=hitShape(r,p,touch?18:12); if(sh){ r.shapes=r.shapes.filter(s=>s!==sh); drag.any=true; draw(); } }
+function simplify(pts,eps){ if(pts.length<3) return pts; let dm=0,idx=0; const a={x:pts[0][0],y:pts[0][1]}, b={x:pts.at(-1)[0],y:pts.at(-1)[1]};
+  for(let i=1;i<pts.length-1;i++){ const d=segDist({x:pts[i][0],y:pts[i][1]},a,b); if(d>dm){ dm=d; idx=i; } }
+  if(dm>eps){ const l=simplify(pts.slice(0,idx+1),eps), r=simplify(pts.slice(idx),eps); return l.slice(0,-1).concat(r); } return [pts[0],pts.at(-1)]; }
+cv.addEventListener("dblclick",e=>{ const r=cur(); if(!r) return; const p=evW(e);
+  if(tool==="poly"&&polyDraft){ finishPoly(false,true); return; }
+  if(tool==="select"){ const s=hitShape(r,p)||[...r.shapes].filter(s=>s.t==="zone"&&inZone(s,p)).sort((a,b)=>zoneSize(a)-zoneSize(b))[0]; if(!s) return; if(s.t==="text") editText(s); else if(ZONE_T.has(s.t)&&(s.t!=="poly"||s.closed)) nameShape(s,false); } });
+cv.addEventListener("wheel",e=>{ e.preventDefault(); const b=cv.getBoundingClientRect(), sx=e.clientX-b.left, sy=e.clientY-b.top;
+  const mouseWheel=e.deltaMode===1||(Math.abs(e.deltaY)>=50&&e.deltaX===0&&Number.isInteger(e.deltaY));
+  if(e.ctrlKey||e.metaKey||mouseWheel) setZoomAt(V.z*Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0018)),sx,sy);
+  else { V.x+=e.deltaX/V.z; V.y+=e.deltaY/V.z; draw(); } },{passive:false});
+document.addEventListener("keydown",e=>{
+  if($("#dlg").open||$("#ask").open||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)||!$("#v-survey").classList.contains("on")) return;
+  const k=e.key.toLowerCase(), mod=e.ctrlKey||e.metaKey;
+  if(mod&&k==="z"){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
+  if(mod&&k==="y"){ e.preventDefault(); redo(); return; }
+  if(mod&&k==="a"){ e.preventDefault(); setTool("select"); selectAll(); return; }
+  if(mod&&k==="d"){ e.preventDefault(); if(sel.shapes.size||sel.spots.size) dupSel(); return; }
+  if((k==="delete"||k==="backspace")&&(sel.shapes.size||sel.spots.size)){ e.preventDefault(); delSel(); return; }
+  if(k===" "&&!spaceDown){ spaceDown=true; updateCursor(); e.preventDefault(); return; }
+  if(k==="escape"){ if(polyDraft){ polyDraft=null; polyCursor=null; renderCtx(); draw(); } else if(sel.shapes.size||sel.spots.size){ clearSel(); draw(); } else if($("#app").classList.contains("focus")) toggleFocus(); return; }
+  if(k==="enter"&&polyDraft){ finishPoly(false,true); return; }
+  if(k==="r"&&(sel.shapes.size||sel.spots.size)){ rotateSel(); return; }
+  if(mod) return;
+  const m={s:"spot",v:"select",p:"pen",w:"wall",o:"poly",b:"rect",z:"zone",c:"circle",a:"arrow",m:"dim",t:"text",d:"door",n:"win",l:"lamp",e:"erase",h:"pan"}[k];
+  if(m) setTool(m); });
+document.addEventListener("keyup",e=>{ if(e.key===" "){ spaceDown=false; updateCursor(); } });
+
+/* view controls */
+$("#v-undo").innerHTML=svg("undo"); $("#v-redo").innerHTML=svg("redo"); $("#v-zin").innerHTML=svg("zin"); $("#v-zout").innerHTML=svg("zout"); $("#v-fit").innerHTML=svg("fit"); $("#v-focus").innerHTML=svg("focus");
+$("#v-undo").onclick=undo; $("#v-redo").onclick=redo;
+$("#v-zin").onclick=()=>setZoomAt(V.z*1.35,W/2,H/2); $("#v-zout").onclick=()=>setZoomAt(V.z/1.35,W/2,H/2);
+$("#v-fit").onclick=()=>fitView(); $("#v-zlbl").onclick=()=>fitView();
+function toggleFocus(){ $("#app").classList.toggle("focus"); $("#v-focus").classList.toggle("on",$("#app").classList.contains("focus")); requestAnimationFrame(()=>{ resize(); }); }
+$("#v-focus").onclick=toggleFocus;
+
+/* ===================== ROOMS ===================== */
+const catOptions=`<option value="auto">Auto</option>`+CATS.map(c=>`<option value="${c.k}">${esc(c.n)} · ${c.lo}–${c.hi} lx</option>`).join("");
+$("#r-cat").innerHTML=catOptions;
+function renderRoomList(){
+  const ul=$("#roomlist"); ul.innerHTML=S.rooms.map((r,i)=>{ const st=roomStats(r);
+    return `<li data-id="${r.id}" class="${r.id===S.cur?"on":""}"><div style="min-width:0"><div class="rn">${esc(r.name||"Untitled room")}</div><div class="rs">${st.n} reading${st.n===1?"":"s"}</div></div><span class="pill ${st.rating}">${st.n?fmt(st.avg)+" lx":"—"}</span></li>`; }).join("");
+  const on=ul.querySelector("li.on"); if(on&&ul.scrollWidth>ul.clientWidth){ const l=on.offsetLeft-ul.offsetLeft; if(l<ul.scrollLeft||l+on.offsetWidth>ul.scrollLeft+ul.clientWidth) ul.scrollLeft=l-8; }
+}
+$("#roomlist").addEventListener("click",e=>{ const li=e.target.closest("li"); if(!li||li.dataset.id===S.cur) return; switchRoom(li.dataset.id); });
+function switchRoom(id){ const r0=cur(); if(r0) views[r0.id]={...V}; if(polyDraft){ polyDraft=null; polyCursor=null; } S.cur=id; save(); clearSel(); undoStack=[]; redoStack=[]; updUndo(); loadRoom(); }
+function loadRoom(){ const r=cur(); bgImg=null; if(r&&r.bg){ const im=new Image(); im.onload=()=>{ bgImg=im; draw(); }; im.src=r.bg.data; }
+  if(r){ if(views[r.id]) V={...views[r.id]}; else requestAnimationFrame(()=>fitView(r)); } renderAll(); }
+$("#btn-addroom").onclick=async()=>{
+  const v=await ask({title:"New room",fields:[{id:"name",label:"Room name",placeholder:"e.g. Ward 5, Main office, Corridor"}],ok:"Add room"}); if(!v) return;
+  const r={id:uid(),name:v.name.trim(),cat:"auto",grid:0.5,shapes:[],points:[],bg:null}; S.rooms.push(r); switchRoom(r.id); setTool("spot");
+};
+async function deleteRoom(){ const r=cur(); if(!r) return; if(!await ask({title:`Delete “${r.name||"this room"}”?`,text:"The drawing and all its readings will be removed.",ok:"Delete room",danger:true})) return;
+  const i=S.rooms.indexOf(r); S.rooms.splice(i,1); S.cur=(S.rooms[i]||S.rooms[i-1]||{}).id||null; save(); clearSel(); loadRoom(); }
+$("#r-name").addEventListener("input",e=>{ const r=cur(); if(!r) return; r.name=e.target.value; save(); renderRoomList(); renderReadings(); updCatSel(); draw(); });
+$("#r-cat").addEventListener("change",e=>{ const r=cur(); if(!r) return; r.cat=e.target.value; save(); renderAll(); });
+function updCatSel(){ const r=cur(); if(!r) return; const c=roomCat(r), auto=!r.cat||r.cat==="auto"; $("#r-cat").options[0].text=auto?`Auto · ${c.n}`:"Auto"; $("#r-cat").value=r.cat||"auto"; }
+
+/* empty states */
+function renderEmpty(){
+  const r=cur(), el=$("#emptyCard");
+  if(!r){ el.innerHTML=`<h3>Add your first room</h3><p>Each room gets its own sketch and readings.</p><div class="opts"><button class="b pri" data-e="add">${svg("spot")}<span>Add a room</span></button></div>`; el.hidden=false; return; }
+  if(r.shapes.length||r.points.length||r.bg||polyDraft){ el.hidden=true; return; }
+  el.innerHTML=`<h3>Draw ${esc(r.name||"the room")}</h3><p>Pick a quick start, or choose any tool on the toolbar.</p><div class="opts">
+    <button class="b" data-e="poly">${svg("poly")}<span>Tap the corners<small>Draw any room shape corner by corner</small></span></button>
+    <button class="b" data-e="quick">${svg("rect")}<span>Length × width<small>A rectangular room from two measurements</small></span></button>
+    <button class="b" data-e="photo">${svg("photo")}<span>Use a floor-plan photo<small>Trace over a photo or drawing</small></span></button>
+    <button class="b" data-e="spot">${svg("spot")}<span>Skip drawing<small>Just place lux spots</small></span></button></div>`;
+  el.hidden=false;
+}
+$("#emptyCard").addEventListener("click",e=>{ const b=e.target.closest("[data-e]"); if(!b) return; const k=b.dataset.e;
+  if(k==="add") $("#btn-addroom").click(); else if(k==="poly"){ setTool("poly"); $("#emptyCard").hidden=true; } else if(k==="quick") quickBox(); else if(k==="photo") $("#f-bg").click(); else { setTool("spot"); $("#emptyCard").hidden=true; } });
+
+async function quickBox(){ const r=cur(); if(!r) return;
+  const v=await ask({title:"Room box",text:"Enter the room size in metres.",fields:[{id:"l",label:"Length (m)",type:"number",placeholder:"8"},{id:"w",label:"Width (m)",type:"number",placeholder:"6"}],ok:"Draw"});
+  if(!v) return; const L=+v.l, Wd=+v.w; if(!(L>0&&Wd>0)) return toast("Enter both sizes in metres");
+  const ob=contentBounds(r,false); const x=ob?Math.round((ob.x1+1)*2)/2:0, y=ob?Math.round(ob.y0*2)/2:0;
+  snapshot(); r.shapes.push({t:"rect",x,y,w:L,h:Wd,c:style.c,w2:style.w}); save(); renderAll(); fitView(); setTool("spot");
+}
+async function autoSpots(){ const r=cur(); if(!r) return; const o=[...r.shapes].reverse().find(s=>s.t==="rect"||(s.t==="poly"&&s.closed)); if(!o) return toast("Draw the room outline first");
+  const v=await ask({title:"Grid of spots",text:"Spots are spread evenly inside the room outline.",fields:[{id:"nx",label:"Across",type:"number",value:"3"},{id:"ny",label:"Down",type:"number",value:"2"}],ok:"Add spots"}); if(!v) return;
+  const nx=Math.max(1,Math.min(12,+v.nx||1)), ny=Math.max(1,Math.min(12,+v.ny||1)), b=sbox(o); snapshot();
+  for(let j=0;j<ny;j++) for(let i=0;i<nx;i++) r.points.push(newSpot(+(b.x0+(b.x1-b.x0)*(i+.5)/nx).toFixed(3),+(b.y0+(b.y1-b.y0)*(j+.5)/ny).toFixed(3)));
+  save(); renderAll(); setTool("spot"); toast(`${nx*ny} spots added — tap each to enter its lux`);
+}
+$("#f-bg").onchange=e=>{ const f=e.target.files[0]; if(!f) return; const fr=new FileReader();
+  fr.onload=()=>{ const im=new Image(); im.onload=()=>{ const sc=Math.min(1,1600/Math.max(im.width,im.height)), c=document.createElement("canvas"); c.width=im.width*sc; c.height=im.height*sc;
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height); const r=cur(); const p0=toW(W*.1,H*.1), p1=toW(W*.9,H*.9);
+      snapshot(); r.bg={data:c.toDataURL("image/jpeg",.72),x:p0.x,y:p0.y,w:p1.x-p0.x,h:p1.y-p0.y}; save(); bgImg=null; loadRoom(); toast("Photo placed — trace the walls over it"); setTool("poly"); };
+    im.src=fr.result; }; fr.readAsDataURL(f); e.target.value=""; };
+
+/* ===================== READINGS PANEL ===================== */
+function renderReadings(){
+  const r=cur(); const list=$("#splist");
+  if(!r){ $("#r-stats").innerHTML=""; $("#r-std").textContent=""; list.innerHTML=""; $("#readchip").hidden=true; return; }
+  const st=roomStats(r), c=st.c;
+  $("#r-stats").innerHTML=[["Average",st.n?`<span class="num">${fmt(st.avg)}</span> lx`:"–"],["Min / max",st.n?`<span class="num">${fmt(st.min)}/${fmt(st.max)}</span>`:"–"],["Uniformity",st.n?`<span class="num">${fmt(st.uo,2)}</span>`:"–"],
+    ["JIS spots",st.n?`<span style="color:var(--good)">${st.good}✓</span> <span style="color:var(--low)">${st.low}▼</span> <span style="color:var(--high)">${st.high}▲</span>`:"–"],
+    ["OSHA spots",st.n?`<span style="color:var(--good)">${st.pass}✓</span> <span style="color:var(--low)">${st.fail}✗</span>`:"–"],["Floor area",st.area?`<span class="num">${fmt(st.area,1)}</span> m²`:"–"]]
+    .map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("#r-std").innerHTML=`Room type: <b>${esc(c.n)}</b> · JIS ${c.lo}–${c.hi} lx · OSHA min ${oshaLux(c.osha)} lx. Name any shape (Select → Name) to give spots inside it their own lux level.`;
+  const zs=zoneStats(r), others=r.shapes.filter(q=>q.t!=="text"&&!isZone(q)&&((q.name&&q.name.trim())||q.note));
+  const noteHTML=q=>q.note?`<div class="znote">${esc(q.note)}</div>`:"";
+  $("#zonelist").innerHTML=(zs.length||others.length)?`<h4>Areas &amp; items</h4>`+zs.map((q,i)=>`<div class="zrow" data-z="${r.shapes.indexOf(q.z)}" style="--zc:${q.z.c&&q.z.c!=="#24312d"?q.z.c:"var(--brand)"}"><div style="min-width:0"><div class="zn">${esc(q.z.name)}</div><div class="zc">${esc(q.c.n)}${q.auto?" (room type)":""} · ${q.c.lo}–${q.c.hi} lx</div></div><span class="za">${q.n?fmt(q.avg)+" lx":"–"}</span><span class="pill ${q.rating}">${q.rating==="none"?"—":q.rating}</span>${noteHTML(q.z)}</div>`).join("")
+    +others.map(q=>`<div class="zrow" data-z="${r.shapes.indexOf(q)}" style="--zc:var(--line)"><div style="min-width:0"><div class="zn">${esc((q.name&&q.name.trim())||"Unnamed "+KIND_NAME(q))}</div><div class="zc">${esc(NAMES[q.t==="stamp"?q.k:q.t]||"Item")}</div></div><span></span><span></span>${noteHTML(q)}</div>`).join(""):"";
+  list.innerHTML=r.points.length?r.points.map((p,i)=>{ const e=spotEval(r,p), info=spotCatInfo(r,p);
+    return `<li data-i="${i}"><span class="sdot" style="background:${SPOTC[e.jis]}">${i+1}</span><div style="min-width:0"><div class="loc">${esc(spotLoc(r,p)||"No location")}</div><div class="cat">${esc(e.c.n)} · ${e.c.lo}–${e.c.hi} lx · ${esc(srcText(info))}</div></div>
+      <div class="lx">${hasLux(p.lux)?fmt(p.lux):"–"}<span class="muted" style="font-family:var(--f-ui);font-size:12px"> lx</span></div>
+      <div class="pills"><span class="pill ${e.jis}">JIS ${e.jis==="none"?"—":e.jis}</span><span class="pill ${e.osha}">OSHA ${e.osha==="none"?"—":e.osha==="Pass"?"Pass":"Below "+e.omin}</span>${p.note?`<span class="muted" style="font-size:12px">${esc(p.note)}</span>`:""}</div></li>`; }).join("")
+    :`<li style="cursor:default;display:block" class="rempty">No readings yet. Choose <b>Lux spot</b> and tap the sketch where you measured.</li>`;
+  const chip=$("#readchip"); chip.hidden=false; chip.innerHTML=`${svg("spot",18)}<span>${st.n} reading${st.n===1?"":"s"}${st.n?` · avg <span class="num">${fmt(st.avg)}</span> lx`:""}</span>`;
+}
+$("#splist").addEventListener("click",e=>{ const li=e.target.closest("li[data-i]"); if(li){ if(isPhone()) $("#readings").classList.remove("open"); openSpot(+li.dataset.i,false); } });
+$("#splist").addEventListener("pointerover",e=>{ const li=e.target.closest("li[data-i]"); const r=cur(); hlSpot=li&&r?r.points[+li.dataset.i]:null; draw(); });
+$("#splist").addEventListener("pointerleave",()=>{ hlSpot=null; draw(); });
+$("#zonelist").addEventListener("click",e=>{ const z=e.target.closest("[data-z]"); const r=cur(); if(!z||!r) return; const s=r.shapes[+z.dataset.z]; if(!s) return;
+  if(isPhone()) $("#readings").classList.remove("open"); setTool("select"); sel.shapes.add(s); renderCtx(); draw(); nameShape(s,false); });
+$("#readchip").onclick=()=>$("#readings").classList.add("open");
+$("#r-close").onclick=()=>$("#readings").classList.remove("open");
+
+function renderAll(){ renderRoomList(); renderRail(); const r=cur(); $("#roombar").style.visibility=r?"visible":"hidden";
+  if(r){ if(document.activeElement!==$("#r-name")) $("#r-name").value=r.name; updCatSel(); const a=roomArea(r); $("#areaChip").hidden=!a; if(a) $("#areaVal").textContent=fmt(a,1)+" m²"; }
+  renderReadings(); renderEmpty(); renderCtx(); updUndo(); draw(); }
+
+/* ===================== SPOT SHEET ===================== */
+const dlg=$("#dlg"), dLoc=$("#dlgLoc"), dLux=$("#dlgLux"), dJis=$("#dlgJis"), dOsha=$("#dlgOsha"), dNote=$("#dlgNote");
+dJis.innerHTML=catOptions;
+dOsha.innerHTML=`<option value="auto">Auto</option>`+Object.entries(OSHA).map(([k,o])=>`<option value="${k}">${o.fc} fc (${oshaLux(k)} lx) · ${esc(o.n)}</option>`).join("");
+const CHIPS={ward:["Bed head","Ward floor (general)","Nurse station","Corridor","Toilet"],bedhead:["Bed head","Ward floor (general)"],
+  office:["Desk","Computer desk","Meeting table","Filing area","Corridor"],production:["Workbench","Machine","Inspection table","Packing area","Aisle","Store rack"],
+  corridor:["Corridor","Lobby","Stairs","Entrance"],store:["Store rack","Aisle","Packing area"],exam:["Examination couch","Doctor's desk","Treatment area"],
+  kitchen:["Food prep table","Cooking area","Wash area","Store"],general:["Desk","Workbench","Floor (general)","Corridor","Store rack","Toilet"]};
+let dlgIdx=-1, dlgNew=false;
+function draftSpot(){ const p=cur().points[dlgIdx]; return {...p,loc:dLoc.value,lux:dLux.value===""?null:+dLux.value,jis:dJis.value,osha:dOsha.value}; }
+function renderVerdict(){ const r=cur(); if(!r||dlgIdx<0) return; const d=draftSpot(), ev=spotEval(r,d), info=spotCatInfo(r,d);
+  $("#dlgZone").innerHTML=info.z?`In area: <b>${esc(info.z.name)}</b>`:"";
+  dLoc.placeholder=info.z?`Optional — blank uses area “${info.z.name}”`:`e.g. Desk, Bed head (blank = ${roomCat(r).n})`;
+  $("#vJis").className="verdict "+ev.jis; $("#vOsha").className="verdict "+ev.osha;
+  $("#vJisC").innerHTML=`${esc(ev.c.n)} <span style="opacity:.8">(${esc(srcText(info))})</span><br><b>${ev.c.lo}–${ev.c.hi} lx</b> · Em ${ev.c.em}`;
+  $("#vOshaC").innerHTML=`${esc(OSHA[ev.ok].n)}${d.osha==="auto"?" (auto)":""}<br><b>min ${ev.omin} lx</b> (${OSHA[ev.ok].fc} fc)`;
+  $("#vJisR").textContent=ev.jis==="none"?"—":ev.jis==="Good"?"✓ Good":ev.jis==="Low"?"▼ Low":"▲ High";
+  $("#vOshaR").textContent=ev.osha==="none"?"—":ev.osha==="Pass"?"✓ Pass":"✗ Below min";
+  $("#dlgNum").style.background=SPOTC[ev.jis];
+  $$("#dlgChips button").forEach(c=>c.classList.toggle("on",c.textContent===dLoc.value)); }
+function openSpot(i,isNew){ const r=cur(); if(!r||i<0) return; const p=r.points[i]; dlgIdx=i; dlgNew=isNew;
+  $("#dlgNum").textContent=i+1; $("#dlgTitle").textContent=`Spot ${i+1} · ${r.name||"Room"}`;
+  dLoc.value=p.loc||""; dLux.value=hasLux(p.lux)?p.lux:""; dJis.value=p.jis||"auto"; dOsha.value=p.osha||"auto"; dNote.value=p.note||"";
+  const used=[...new Set(r.points.map(q=>q.loc).filter(Boolean))];
+  $("#dlgChips").innerHTML=[...new Set([...used,...(CHIPS[roomCat(r).k]||CHIPS.general)])].slice(0,8).map(c=>`<button type="button">${esc(c)}</button>`).join("");
+  $("#dlgDel").textContent=isNew?"Discard":"Delete";
+  $("#dlgAdv").open=(p.jis&&p.jis!=="auto")||(p.osha&&p.osha!=="auto")||!!p.note;
+  renderVerdict(); dlg.showModal(); setTimeout(()=>{ dLux.focus(); dLux.select(); },60); }
+$("#dlgChips").addEventListener("click",e=>{ const c=e.target.closest("button"); if(!c) return; dLoc.value=c.textContent; renderVerdict(); dLux.focus(); });
+[dLoc,dLux].forEach(el=>el.addEventListener("input",renderVerdict)); [dJis,dOsha].forEach(el=>el.addEventListener("change",renderVerdict));
+dLux.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("#dlgOk").click(); } });
+dLoc.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); dLux.focus(); } });
+dlg.addEventListener("close",()=>{ const r=cur(); if(!r||dlgIdx<0) return; const p=r.points[dlgIdx], v=dlg.returnValue;
+  if(v==="ok"){ const d=draftSpot(); p.loc=d.loc.trim(); p.lux=hasLux(d.lux)?Math.max(0,d.lux):null; p.jis=d.jis; p.osha=d.osha; p.note=dNote.value.trim();
+    const ev=spotEval(r,p); if(hasLux(p.lux)) toast(`Spot ${dlgIdx+1}: ${fmt(p.lux)} lx · JIS ${ev.jis} · OSHA ${ev.osha==="Pass"?"Pass":"below minimum"}`); }
+  else if(v==="delete"||(dlgNew&&!hasLux(p.lux))){ r.points.splice(dlgIdx,1); sel.spots.delete(p); if(dlgNew){ undoStack.pop(); updUndo(); } }
+  dlgIdx=-1; save(); renderAll(); });
+
+/* ===================== IN-PAGE DIALOG ===================== */
+let askLiveFn=null, askChipField=null;
+function askVals(){ const o={}; $$("#askFields [id^=ask_]").forEach(el=>o[el.id.slice(4)]=el.value); return o; }
+function askLiveUpd(){ if(askLiveFn) $("#askLive").innerHTML=askLiveFn(askVals()); }
+$("#askFields").addEventListener("input",askLiveUpd); $("#askFields").addEventListener("change",askLiveUpd);
+$("#askChips").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b||!askChipField) return; $("#ask_"+askChipField).value=b.textContent; askLiveUpd(); $$("#askChips button").forEach(x=>x.classList.toggle("on",x===b)); });
+function ask({title,text="",fields=[],ok="OK",danger=false,chips=null,chipField=null,live=null}){
+  return new Promise(res=>{ const d=$("#ask");
+    $("#askTitle").textContent=title; $("#askText").textContent=text; $("#askText").hidden=!text;
+    $("#askFields").innerHTML=fields.map(f=>`<label class="f"${f.type==="textarea"?' style="grid-column:1/-1"':""}>${esc(f.label)}${f.type==="textarea"?`<textarea id="ask_${f.id}" rows="3" placeholder="${esc(f.placeholder||"")}">${esc(f.value||"")}</textarea>`:f.type==="select"?`<select id="ask_${f.id}">${f.options.map(([v,l])=>`<option value="${v}" ${String(f.value)===v?"selected":""}>${esc(l)}</option>`).join("")}</select>`
+      :`<input id="ask_${f.id}" ${f.type==="number"?'type="number" inputmode="decimal" step="any" min="0"':""} value="${esc(f.value||"")}" placeholder="${esc(f.placeholder||"")}" autocomplete="off">`}</label>`).join("");
+    askLiveFn=live; askChipField=chipField; $("#askLive").hidden=!live;
+    $("#askChips").hidden=!chips; $("#askChips").innerHTML=chips?chips.map(c=>`<button type="button">${esc(c)}</button>`).join(""):"";
+    askLiveUpd();
+    $("#askFields").hidden=!fields.length; const okb=$("#askOk"); okb.textContent=ok; okb.className="b "+(danger?"danger":"pri");
+    const done=()=>{ d.removeEventListener("close",done); if(d.returnValue!=="ok") return res(fields.length?null:false); if(!fields.length) return res(true); const o={}; fields.forEach(f=>o[f.id]=$("#ask_"+f.id).value); res(o); };
+    d.addEventListener("close",done); d.returnValue=""; d.showModal(); const first=d.querySelector("input,select"); if(first) setTimeout(()=>first.focus(),50); }); }
+$("#askFields").addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.target.tagName==="INPUT"){ e.preventDefault(); $("#askOk").click(); } });
+const AREA_SUGG={kitchen:["Cooking area","Food prep area","Wash area","Serving counter","Dry store","AC corridor"],
+  ward:["Patient area","Bed head","Nurse station","Corridor","Toilet","Store"],office:["Office area","Meeting area","Reception","Corridor","Store","Pantry"],
+  production:["Machine area","Assembly line","Inspection area","Packing area","Store","Corridor"],
+  general:["Cooking area","Office area","Corridor","AC corridor","Store","Workshop","Toilet","Waiting area","Nurse station","Machine area","Packing area","Stairs"]};
+const KIND_NAME=s=>(NAMES[s.t==="stamp"?s.k:s.t]||"item").toLowerCase();
+const canZone=s=>ZONE_T.has(s.t)&&(s.t!=="poly"||s.closed);
+async function nameShape(s,isNew){
+  const r=cur(); if(!r||!s) return;
+  const area=canZone(s), used=[...new Set(r.shapes.filter(x=>x!==s&&x.name).map(x=>x.name))];
+  const ITEM_SUGG={door:["Main door","Fire exit","Kitchen door"],win:["Window","Clerestory window"],lamp:["Tube light","LED panel","Faulty tube","Emergency light"],
+    wall:["Partition","Glass wall"],arrow:["Daylight","Airflow","Entry"],dim:["Ceiling height","Working height"],pen:["Counter","Bench"],poly:["Partition"]};
+  const sugg=area?[...new Set([...(AREA_SUGG[roomCat(r).k]||AREA_SUGG.general),...used])].slice(0,10):(ITEM_SUGG[s.t]||[]);
+  const fields=[{id:"name",label:area?"Area name":"Name",value:s.name||"",placeholder:area?"e.g. Cooking area, AC corridor":"e.g. "+(sugg[0]||"Name")}];
+  if(area) fields.push({id:"jis",label:"Lux standard",type:"select",value:s.jis||"auto",options:[["auto","Auto from name"],...CATS.map(c=>[c.k,`${c.n} · ${c.lo}–${c.hi} lx`])]});
+  fields.push({id:"note",label:"Notes",type:"textarea",value:s.note||"",placeholder:"e.g. 2 of 4 tubes not working, daylight from window, measured at 0.85 m"});
+  const v=await ask({title:isNew?"Name this area":(s.name?`Edit ${area?"area":KIND_NAME(s)}`:`Name this ${area&&s.t!=="stamp"?"area":KIND_NAME(s)}`),
+    text:area?"Spots inside it automatically use the matching JIS Z9110 and OSHA lux levels.":"The name and notes appear on the sketch and in the report.",
+    fields, chips:sugg.length?sugg:null, chipField:"name",
+    live:area?(v=>{ const c=v.jis&&v.jis!=="auto"?CATMAP[v.jis]:(v.name.trim()?matchCat(v.name):null);
+      if(!c) return "Type a name or tap a suggestion to see its lux level.";
+      if((!v.jis||v.jis==="auto")&&c.k==="general") return `No match for this name yet. Spots inside will use the room type (<b>${esc(roomCat(r).n)}</b>). Choose a lux standard to set it.`;
+      return `<b>${esc(c.n)}</b> · JIS <b>${c.lo}–${c.hi} lx</b> (Em ${c.em}) · OSHA min <b>${oshaLux(c.osha)} lx</b>`; }):null,
+    ok:"Save"});
+  if(!v) return; snapshot();
+  const nm=v.name.trim().slice(0,50); if(nm) s.name=nm; else delete s.name;
+  if(area) s.jis=v.jis; const nt=(v.note||"").trim().slice(0,600); if(nt) s.note=nt; else delete s.note;
+  save(); renderAll();
+  if(area&&nm){ const n=r.points.filter(p=>spotZone(r,p)===s).length, c=zoneCat(s)||roomCat(r); toast(n?`${n} spot${n===1?"":"s"} in “${nm}” now checked against ${c.lo}–${c.hi} lx`:`“${nm}” set to ${c.lo}–${c.hi} lx. Spots placed inside will use it.`,3200); }
+  else toast(nm||nt?"Saved":"Name removed");
+}
+async function editText(s){ const v=await ask({title:"Edit label",fields:[{id:"s",label:"Text",value:s.s},{id:"size",label:"Size",type:"select",value:String(s.size),options:[["0.25","Small"],["0.35","Medium"],["0.55","Large"]]}],ok:"Save"});
+  if(v&&v.s.trim()){ snapshot(); s.s=v.s.trim(); s.size=+v.size; save(); draw(); } }
+
+/* ===================== TABS / PROJECT ===================== */
+function show(v){ $$("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v)); $$(".view").forEach(x=>x.classList.toggle("on",x.id==="v-"+v));
+  if(v==="survey") requestAnimationFrame(()=>{ resize(); renderAll(); }); if(v==="report") renderReport(); }
+$("#tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) show(b.dataset.v); });
+$$("[data-go]").forEach(b=>b.addEventListener("click",()=>show(b.dataset.go)));
+const PF=["facility","location","building","date","auditor","org","meter","height","cond","notes"];
+function bindProject(){ PF.forEach(k=>{ const el=$("#p-"+k); el.value=S.project[k]||""; el.oninput=()=>{ S.project[k]=el.value; save(); updFac(); }; }); updFac(); }
+function updFac(){ $("#facLabel").textContent=[S.project.facility,S.project.building].filter(Boolean).join(" · "); $("#exampleBar").hidden=!S.example; }
+$("#btn-startreal").onclick=()=>{ S=fresh(); save(); bindProject(); loadRoom(); show("project"); toast("New survey — enter the site details, then add rooms"); };
+$("#btn-backup").onclick=()=>saveFile(new Blob([JSON.stringify(S)],{type:"application/json"}),fileBase()+".json");
+$("#btn-restore").onclick=()=>$("#f-restore").click();
+$("#f-restore").onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+  f.text().then(t=>{ let d=JSON.parse(t); if(!d||!Array.isArray(d.rooms)) throw 0; if(!d.v) d=migrateV3(d); d.rooms.forEach(r=>{ r.grid=r.grid||0.5; r.points=r.points.map(p=>({loc:"",jis:"auto",osha:"auto",note:"",...p})); });
+    S=d; S.example=false; save(); bindProject(); loadRoom(); toast("Backup opened"); }).catch(()=>toast("That file is not a LuxLog backup")); e.target.value=""; };
+$("#btn-new").onclick=async()=>{ if(!await ask({title:"Start a new survey?",text:"This clears the current survey on this device. Download a backup first if you need it.",ok:"Start new",danger:true})) return;
+  S=fresh(); save(); bindProject(); loadRoom(); toast("New survey started"); };
+
+/* ===================== REPORT IMAGES ===================== */
+function loadImg(src){ return new Promise(res=>{ if(!src) return res(null); const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src; }); }
+async function sketchPNG(r){
+  const img=await loadImg(r.bg&&r.bg.data); const b=contentBounds(r,!!img)||{x0:0,y0:0,x1:8,y1:6};
+  const pad=1.2, bw=b.x1-b.x0+pad*2, bh=b.y1-b.y0+pad*2, z=Math.min(110,1700/bw,1200/bh), Wc=Math.round(bw*z), Hc=Math.round(bh*z), ui=Math.max(1.3,Math.min(2.2,Wc/850));
+  const c=document.createElement("canvas"), foot=Math.round(34*ui); c.width=Wc; c.height=Hc+foot; const g=c.getContext("2d");
+  paint(g,r,{x:b.x0-pad,y:b.y0-pad,z},Wc,Hc,{ui,bg:img,noDims:false});
+  g.fillStyle="#fff"; g.fillRect(0,Hc,Wc,foot); g.strokeStyle="#d3ddd9"; g.strokeRect(.5,.5,Wc-1,Hc-1);
+  g.fillStyle="#16221e"; g.fillRect(12*ui,Hc+foot/2-2,z,4); g.font=`${12*ui}px "IBM Plex Sans",sans-serif`; g.textBaseline="middle"; g.textAlign="left"; g.fillText("1 m",z+20*ui,Hc+foot/2);
+  g.textAlign="right"; g.fillStyle="#5a6b65"; g.fillText(`Grid ${r.grid} m · spot colour = JIS rating · dashed ring = below OSHA minimum`,Wc-10,Hc+foot/2);
+  return {url:c.toDataURL("image/png"),w:c.width,h:c.height};
+}
+function roomChartPNG(r){
+  const Wc=1400,Hc=560,cv2=document.createElement("canvas"); cv2.width=Wc; cv2.height=Hc; const g=cv2.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,Wc,Hc);
+  const pts=r.points.map((p,i)=>({lab:String(i+1),v:hasLux(p.lux)?+p.lux:null,e:spotEval(r,p)})), L=90,R=30,T=50,B=70,pw=Wc-L-R,ph=Hc-T-B;
+  const vmax=Math.max(...pts.map(p=>Math.max(p.v||0,p.e.c.hi*1.1,p.e.omin)),100)*1.08, y=v=>T+ph-(v/vmax)*ph;
+  g.font="600 26px 'IBM Plex Sans',sans-serif"; g.fillStyle="#16221e"; g.textAlign="left"; g.textBaseline="top"; g.fillText(`${r.name||"Room"} · illuminance by spot`,L,10);
+  g.strokeStyle="#d3ddd9"; g.lineWidth=1; g.font="20px 'IBM Plex Mono',monospace"; g.fillStyle="#5a6b65"; g.textAlign="right"; g.textBaseline="middle";
+  const step=niceStep(vmax/5); for(let v=0;v<=vmax;v+=step){ line(g,L,y(v)+.5,L+pw,y(v)+.5); g.fillText(fmt(v),L-10,y(v)); }
+  g.save(); g.translate(24,T+ph/2); g.rotate(-Math.PI/2); g.textAlign="center"; g.font="20px 'IBM Plex Sans',sans-serif"; g.fillText("Illuminance (lx)",0,0); g.restore();
+  const n=Math.max(1,pts.length), slot=pw/n, bw=Math.min(70,slot*.55);
+  pts.forEach((p,i)=>{ const cx=L+slot*(i+.5);
+    g.fillStyle="rgba(31,127,74,.13)"; g.fillRect(cx-slot*.42,y(p.e.c.hi),slot*.84,y(p.e.c.lo)-y(p.e.c.hi));
+    if(p.v!=null){ g.fillStyle=SPOTC[p.e.jis]; g.fillRect(cx-bw/2,y(p.v),bw,T+ph-y(p.v)); g.fillStyle="#16221e"; g.font="600 19px 'IBM Plex Mono',monospace"; g.textAlign="center"; g.textBaseline="bottom"; g.fillText(fmt(p.v),cx,y(p.v)-4); }
+    g.save(); g.strokeStyle="#c23838"; g.lineWidth=3; g.setLineDash([5,4]); line(g,cx-slot*.42,y(p.e.omin),cx+slot*.42,y(p.e.omin)); g.restore();
+    g.fillStyle="#5a6b65"; g.font="20px 'IBM Plex Sans',sans-serif"; g.textAlign="center"; g.textBaseline="top"; g.fillText(p.lab,cx,T+ph+8); });
+  g.font="19px 'IBM Plex Sans',sans-serif"; g.textAlign="left"; g.textBaseline="top"; let lx=L;
+  [["rgba(31,127,74,.3)","JIS Z9110 range"],["#c23838","OSHA minimum"],["#1f7f4a","Good"],["#c23838","Low"],["#c08100","High"]].forEach(([col,t])=>{ g.fillStyle=col; g.fillRect(lx,Hc-30,22,14); g.fillStyle="#5a6b65"; g.fillText(t,lx+28,Hc-33); lx+=g.measureText(t).width+60; });
+  return cv2.toDataURL("image/png");
+}
+function summaryChartPNG(){
+  const rooms=S.rooms.filter(r=>roomStats(r).n); if(!rooms.length) return null;
+  const Wc=1400,Hc=Math.max(300,110+rooms.length*56),cv2=document.createElement("canvas"); cv2.width=Wc; cv2.height=Hc; const g=cv2.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,Wc,Hc);
+  const L=360,R=60,T=60,B=50,pw=Wc-L-R,rowH=(Hc-T-B)/rooms.length, vmax=Math.max(...rooms.map(r=>{ const s=roomStats(r); return Math.max(s.avg,s.c.hi); }))*1.1, x=v=>L+v/vmax*pw;
+  g.font="600 26px 'IBM Plex Sans',sans-serif"; g.fillStyle="#16221e"; g.textBaseline="top"; g.fillText("Average illuminance by room vs JIS Z9110 range",20,12);
+  g.strokeStyle="#e5ebe9"; g.font="18px 'IBM Plex Mono',monospace"; g.fillStyle="#5a6b65"; g.textAlign="center";
+  const step=niceStep(vmax/6); for(let v=0;v<=vmax;v+=step){ line(g,x(v)+.5,T,x(v)+.5,Hc-B); g.fillText(fmt(v),x(v),Hc-B+8); }
+  rooms.forEach((r,i)=>{ const s=roomStats(r), cy=T+rowH*i+rowH/2, bh=Math.min(30,rowH*.55);
+    g.fillStyle="rgba(31,127,74,.15)"; g.fillRect(x(s.c.lo),cy-bh/2-6,x(s.c.hi)-x(s.c.lo),bh+12); g.fillStyle=SPOTC[s.rating]; g.fillRect(L,cy-bh/2,x(s.avg)-L,bh);
+    g.fillStyle="#16221e"; g.font="600 19px 'IBM Plex Mono',monospace"; g.textAlign="left"; g.textBaseline="middle"; g.fillText(fmt(s.avg)+" lx",x(s.avg)+8,cy);
+    g.textAlign="right"; g.font="20px 'IBM Plex Sans',sans-serif"; let nm=r.name||"Room "+(i+1); if(nm.length>30) nm=nm.slice(0,29)+"…"; g.fillText(nm,L-14,cy); });
+  return cv2.toDataURL("image/png");
+}
+function niceStep(x){ const p=Math.pow(10,Math.floor(Math.log10(x||1))), f=x/p; return (f<1.5?1:f<3?2:f<7?5:10)*p; }
+async function renderReport(){
+  $("#sumtable").innerHTML=`<thead><tr><th>Room</th><th class="hide-sm">Room type</th><th class="n">Avg lx</th><th class="n hide-sm">Min</th><th class="n hide-sm">Max</th><th class="n hide-sm">Uo</th><th>JIS (avg)</th><th>Spots good</th><th>OSHA pass</th></tr></thead><tbody>`+
+    (S.rooms.map(r=>{ const s=roomStats(r); return `<tr><td>${esc(r.name||"Untitled")}</td><td class="hide-sm muted">${esc(s.c.n)}</td><td class="n"><b>${fmt(s.avg)}</b></td><td class="n hide-sm">${fmt(s.min)}</td><td class="n hide-sm">${fmt(s.max)}</td><td class="n hide-sm">${s.n?fmt(s.uo,2):"–"}</td><td><span class="pill ${s.rating}">${s.rating==="none"?"—":s.rating}</span></td><td class="n">${s.n?`${s.good}/${s.n}`:"–"}</td><td class="n">${s.n?`${s.pass}/${s.n}`:"–"}</td></tr>`; }).join("")||`<tr><td colspan="9" class="muted">No rooms yet.</td></tr>`)+`</tbody>`;
+  const sc=summaryChartPNG(), im=$("#sumchart"); im.hidden=!sc; if(sc) im.src=sc;
+  const box=$("#repRooms"); box.innerHTML="";
+  for(const r of S.rooms){ const s=roomStats(r), d=document.createElement("div"); d.className="card";
+    d.innerHTML=`<h2>${esc(r.name||"Untitled room")} <span class="pill ${s.rating}">${s.rating==="none"?"no readings":"avg "+fmt(s.avg)+" lx · "+s.rating}</span></h2><div class="repRoom"><img alt="Sketch of ${esc(r.name)}"><img alt="Chart of ${esc(r.name)}"></div>`;
+    box.appendChild(d); const [a,b]=d.querySelectorAll("img"); a.src=(await sketchPNG(r)).url; b.src=roomChartPNG(r); }
+}
+
+/* ===================== FILE SAVING ===================== */
+function fileBase(){ const f=(S.project.facility||"Survey").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"_").slice(0,40)||"Survey"; return `LuxLog_${f}_${S.project.date||new Date().toISOString().slice(0,10)}`; }
+async function saveFile(blob,name){
+  if(window.claude&&typeof window.claude.use==="function"){
+    try{ const dl=await window.claude.use("downloads"); if(dl){ await dl.save({filename:name,data:blob}); toast("Saved "+name); return; } }
+    catch(e){ if(e&&e.code==="declined"){ toast("Download cancelled"); return; } if(e&&e.code==="rate_limited"){ toast("A download is already waiting for your answer"); return; } }
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },2000); toast("Downloaded "+name);
+}
+function b64ToBytes(u){ const b=atob(u.split(",")[1]), a=new Uint8Array(b.length); for(let i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a; }
+const needRooms=()=>{ if(!S.rooms.length){ toast("Add at least one room first"); return false; } return true; };
+const libReady=n=>{ if(!window[n]){ toast("Report tools are still loading. Check the internet connection and try again."); return false; } return true; };
+const projRows=()=>[["Facility / site",S.project.facility],["Location",S.project.location],["Building / area",S.project.building],["Survey date",S.project.date],["Surveyed by",S.project.auditor],["Organisation",S.project.org],["Lux meter",S.project.meter],["Measuring height (m)",S.project.height],["Time / conditions",S.project.cond]].filter(r=>r[1]);
+const dash=v=>v==="none"?"–":v;
+
+/* ===================== WORD ===================== */
+$("#btn-word").onclick=async()=>{
+  if(!needRooms()||!libReady("docx")) return; const btn=$("#btn-word"); btn.disabled=true; toast("Building Word report…");
+  try{
+    const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,ImageRun,HeadingLevel,AlignmentType,WidthType,BorderStyle,ShadingType,PageBreak}=window.docx;
+    const FONT="Calibri", bd={style:BorderStyle.SINGLE,size:4,color:"BFC9C6"}, borders={top:bd,bottom:bd,left:bd,right:bd}, fill={Low:"F6D5D5",Good:"D3EFDD",High:"FBEBC8",Pass:"D3EFDD",Fail:"F6D5D5"};
+    const P=(t,o={})=>new Paragraph({spacing:{after:o.after??120},alignment:o.align,children:[new TextRun({text:String(t??""),bold:o.bold,size:o.size??21,font:FONT,color:o.color,italics:o.it})]});
+    const cell=(t,w,o={})=>new TableCell({borders,width:{size:w,type:WidthType.DXA},margins:{top:45,bottom:45,left:70,right:70},shading:o.fill?{type:ShadingType.CLEAR,color:"auto",fill:o.fill}:undefined,
+      children:[new Paragraph({alignment:o.right?AlignmentType.RIGHT:AlignmentType.LEFT,children:[new TextRun({text:String(t??""),bold:o.bold,size:o.size??17,font:FONT})]})]});
+    const table=(head,rows,widths,right=[])=>new Table({width:{size:widths.reduce((a,b)=>a+b,0),type:WidthType.DXA},columnWidths:widths,rows:[
+      new TableRow({tableHeader:true,children:head.map((h,i)=>cell(h,widths[i],{bold:true,fill:"DBEEE8",right:right.includes(i)}))}),
+      ...rows.map(r=>new TableRow({children:r.map((v,i)=>cell(v&&v.t!==undefined?v.t:v,widths[i],{fill:v&&v.f,right:right.includes(i)}))}))]});
+    const img=(u,w,h)=>new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:100},children:[new ImageRun({data:b64ToBytes(u),transformation:{width:w,height:h}})]});
+    const H=(t,l)=>new Paragraph({heading:l,spacing:{before:240,after:120},children:[new TextRun({text:t,font:FONT})]});
+    const cap=t=>P(t,{size:18,it:true,align:AlignmentType.CENTER,after:200});
+    const kids=[];
+    kids.push(new Paragraph({spacing:{after:80},children:[new TextRun({text:"Lighting Level Survey Report",bold:true,size:36,font:FONT,color:"0E6A5A"})]}));
+    kids.push(P([S.project.facility,S.project.building].filter(Boolean).join(" — "),{size:24,after:200}));
+    const pr=projRows(); if(pr.length) kids.push(table(["Item","Detail"],pr,[3000,6026]));
+    kids.push(H("1. Basis of assessment",HeadingLevel.HEADING_1));
+    kids.push(P("Illuminance was measured with a lux meter at the spots marked on each room sketch. Each spot is assessed against the JIS Z9110:2010 recommended illuminance range for the task or area at that location, and against the minimum illumination intensity in OSHA 29 CFR 1926.56 (1 fc = 10.764 lx). Uniformity is reported as Uo = Emin / Eavg."));
+    kids.push(P("JIS rating: Low = below range; Good = within range; High = above range. OSHA: Pass = at or above the minimum.",{it:true}));
+    kids.push(H("2. Summary of results",HeadingLevel.HEADING_1));
+    kids.push(table(["#","Room","Room type","Area (m²)","Avg (lx)","Min","Max","Uo","JIS (avg)","Spots good","OSHA pass"],
+      S.rooms.map((r,i)=>{ const s=roomStats(r); return [i+1,r.name||"Untitled",s.c.n,s.area?fmt(s.area,1):"–",fmt(s.avg),fmt(s.min),fmt(s.max),s.n?fmt(s.uo,2):"–",{t:dash(s.rating),f:fill[s.rating]},s.n?`${s.good}/${s.n}`:"–",{t:s.n?`${s.pass}/${s.n}`:"–",f:s.n?(s.fail?fill.Fail:fill.Pass):undefined}]; }),
+      [360,1500,1640,760,700,580,580,520,820,780,786],[3,4,5,6,7]));
+    const sc=summaryChartPNG(); if(sc){ const n=S.rooms.filter(r=>roomStats(r).n).length; kids.push(new Paragraph({spacing:{after:100}})); kids.push(img(sc,600,Math.max(130,Math.round(600*(110+n*56)/1400)))); }
+    for(const [i,r] of S.rooms.entries()){
+      const s=roomStats(r); kids.push(new Paragraph({children:[new PageBreak()]})); if(i===0) kids.push(H("3. Room details",HeadingLevel.HEADING_1));
+      kids.push(H(`3.${i+1} ${r.name||"Untitled room"}`,HeadingLevel.HEADING_2));
+      kids.push(P(`Room type: ${s.c.n} (JIS ${s.c.lo}–${s.c.hi} lx, Em ${s.c.em} lx; OSHA minimum ${oshaLux(s.c.osha)} lx).${s.area?` Floor area ${fmt(s.area,1)} m².`:""}`));
+      const sk=await sketchPNG(r), w=Math.min(600,Math.round(320*sk.w/sk.h)); kids.push(img(sk.url,w,Math.round(w*sk.h/sk.w)));
+      kids.push(cap(`Figure ${i+1}a: Sketch of ${r.name||"room"} with measuring spots.`));
+      { const zs=zoneStats(r), others=r.shapes.filter(q=>q.t!=="text"&&!isZone(q)&&((q.name&&q.name.trim())||q.note));
+        if(zs.length){ kids.push(P("Named areas",{bold:true,after:80}));
+          kids.push(table(["Area","JIS type","JIS range","OSHA min","Spots","Avg (lx)","JIS","Notes"],zs.map(q=>[q.z.name,q.c.n+(q.auto?" (room type)":""),`${q.c.lo}–${q.c.hi}`,oshaLux(q.c.osha),q.n,fmt(q.avg),{t:dash(q.rating),f:fill[q.rating]},q.z.note||""]),[1500,1800,900,800,600,800,700,1926],[3,4,5]));
+          kids.push(new Paragraph({spacing:{after:120}})); }
+        if(others.length){ kids.push(P("Other named items",{bold:true,after:80}));
+          kids.push(table(["Item","Type","Notes"],others.map(q=>[(q.name&&q.name.trim())||"—",NAMES[q.t==="stamp"?q.k:q.t]||"Item",q.note||""]),[2200,1800,5026]));
+          kids.push(new Paragraph({spacing:{after:120}})); } }
+      if(r.points.length){
+        kids.push(table(["Spot","Location / task","Lux","JIS type","JIS range","JIS","OSHA min","OSHA"],
+          r.points.map((p,j)=>{ const e=spotEval(r,p); return [j+1,spotLoc(r,p)||"—",hasLux(p.lux)?fmt(p.lux):"–",e.c.n,`${e.c.lo}–${e.c.hi}`,{t:dash(e.jis),f:fill[e.jis]},e.omin,{t:dash(e.osha),f:fill[e.osha]}]; }),
+          [600,1750,700,2400,950,800,900,926],[2,6]));
+        kids.push(P(`Average ${fmt(s.avg)} lx · Min ${fmt(s.min)} · Max ${fmt(s.max)} · Uo ${fmt(s.uo,2)} · Spots within JIS range ${s.good}/${s.n} · OSHA pass ${s.pass}/${s.n}`,{bold:true,after:160}));
+        kids.push(img(roomChartPNG(r),560,224)); kids.push(cap(`Figure ${i+1}b: Measured illuminance by spot, ${r.name||"room"}.`));
+        const notes=r.points.map((p,j)=>p.note?`${j+1}: ${p.note}`:"").filter(Boolean); if(notes.length) kids.push(P("Notes — "+notes.join("; "),{size:18}));
+      } else kids.push(P("No readings recorded.",{it:true}));
+    }
+    if(S.project.notes){ kids.push(H("4. Notes",HeadingLevel.HEADING_1)); S.project.notes.split(/\n+/).forEach(l=>kids.push(P(l))); }
+    const doc=new Document({creator:S.project.auditor||"LuxLog",title:"Lighting Level Survey Report",
+      styles:{default:{document:{run:{font:FONT,size:21}}},paragraphStyles:[
+        {id:"Heading1",name:"Heading 1",basedOn:"Normal",next:"Normal",quickFormat:true,run:{size:28,bold:true,font:FONT,color:"0E6A5A"},paragraph:{spacing:{before:240,after:120},outlineLevel:0}},
+        {id:"Heading2",name:"Heading 2",basedOn:"Normal",next:"Normal",quickFormat:true,run:{size:24,bold:true,font:FONT,color:"16221E"},paragraph:{spacing:{before:200,after:100},outlineLevel:1}}]},
+      sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1134,bottom:1134,left:1134,right:1134}}},children:kids}]});
+    await saveFile(await Packer.toBlob(doc),fileBase()+".docx");
+  }catch(err){ console.error(err); toast("Word report could not be built: "+err.message); }
+  btn.disabled=false;
+};
+
+/* ===================== EXCEL ===================== */
+$("#btn-excel").onclick=async()=>{
+  if(!needRooms()||!libReady("ExcelJS")) return; const btn=$("#btn-excel"); btn.disabled=true; toast("Building Excel workbook…");
+  try{
+    const wb=new ExcelJS.Workbook(); wb.creator=S.project.auditor||"LuxLog"; wb.created=new Date();
+    const FILL={Low:"FFF6D5D5",Good:"FFD3EFDD",High:"FFFBEBC8",Pass:"FFD3EFDD",Fail:"FFF6D5D5"}, thin={style:"thin",color:{argb:"FFBFC9C6"}}, box={top:thin,left:thin,bottom:thin,right:thin};
+    const headRow=row=>row.eachCell(c=>{ c.font={bold:true}; c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFDBEEE8"}}; c.border=box; c.alignment={vertical:"middle",wrapText:true}; });
+    const body=row=>row.eachCell({includeEmpty:true},c=>{ c.border=box; }), tint=(c,k)=>{ if(FILL[k]) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:FILL[k]}}; };
+    const ws=wb.addWorksheet("Summary",{views:[{showGridLines:false}]});
+    ws.columns=[{width:5},{width:26},{width:30},{width:10},{width:10},{width:9},{width:9},{width:8},{width:12},{width:10},{width:11},{width:11}];
+    ws.getCell("A1").value="Lighting Level Survey"; ws.getCell("A1").font={bold:true,size:16,color:{argb:"FF0E6A5A"}};
+    let rr=3; projRows().forEach(([k,v])=>{ ws.getCell(rr,1).value=k; ws.mergeCells(rr,1,rr,2); ws.getCell(rr,1).font={bold:true}; ws.getCell(rr,3).value=v; rr++; }); rr++;
+    const hdr=ws.getRow(rr++); hdr.values=["#","Room","Room type (JIS Z9110)","Area (m²)","Avg (lx)","Min (lx)","Max (lx)","Uo","JIS range (lx)","JIS (avg)","Spots good","OSHA pass"]; headRow(hdr);
+    S.rooms.forEach((r,i)=>{ const s=roomStats(r), row=ws.getRow(rr++);
+      row.values=[i+1,r.name||"Untitled",s.c.n,s.area?+s.area.toFixed(1):null,s.n?Math.round(s.avg):null,s.min,s.max,s.n?+s.uo.toFixed(2):null,`${s.c.lo}–${s.c.hi}`,dash(s.rating),s.n?`${s.good}/${s.n}`:"–",s.n?`${s.pass}/${s.n}`:"–"];
+      body(row); tint(row.getCell(10),s.rating); if(s.n) tint(row.getCell(12),s.fail?"Fail":"Pass"); row.getCell(5).font={bold:true}; });
+    ws.getCell(rr+1,1).value="Basis: JIS Z9110:2010 recommended illuminance range per task/area; OSHA 29 CFR 1926.56 minimums (1 fc = 10.764 lx). Uo = Emin/Eavg."; ws.getCell(rr+1,1).font={italic:true,color:{argb:"FF5A6B65"}};
+    const sc=summaryChartPNG(); if(sc){ const n=S.rooms.filter(r=>roomStats(r).n).length; ws.addImage(wb.addImage({base64:sc,extension:"png"}),{tl:{col:0,row:rr+2},ext:{width:900,height:Math.max(190,Math.round(900*(110+n*56)/1400))}}); }
+    const wa=wb.addWorksheet("All spots",{views:[{state:"frozen",ySplit:1}]});
+    wa.columns=[{header:"Room #",width:8},{header:"Room",width:24},{header:"Spot",width:7},{header:"Location / task",width:24},{header:"Lux",width:9},{header:"JIS type",width:30},{header:"JIS range",width:11},{header:"JIS",width:9},{header:"OSHA min (lx)",width:12},{header:"OSHA",width:9},{header:"x (m)",width:8},{header:"y (m)",width:8},{header:"Note",width:30},{header:"Area",width:22}];
+    headRow(wa.getRow(1));
+    S.rooms.forEach((r,i)=>r.points.forEach((p,j)=>{ const e=spotEval(r,p); const zz=spotZone(r,p); const row=wa.addRow([i+1,r.name||"Untitled",j+1,spotLoc(r,p),hasLux(p.lux)?+p.lux:null,e.c.n,`${e.c.lo}–${e.c.hi}`,dash(e.jis),e.omin,dash(e.osha),...posM(r,p),p.note||"",zz?zz.name:""]); body(row); tint(row.getCell(8),e.jis); tint(row.getCell(10),e.osha); }));
+    wa.autoFilter={from:"A1",to:"N1"};
+    const used=new Set(["summary","all spots"]);
+    for(const [i,r] of S.rooms.entries()){
+      let nm=`${i+1} ${r.name||"Room"}`.replace(/[\\\/\?\*\[\]:]/g," ").slice(0,31).trim(); while(used.has(nm.toLowerCase())) nm=nm.slice(0,28)+"_"+i; used.add(nm.toLowerCase());
+      const w=wb.addWorksheet(nm,{views:[{showGridLines:false}]}), s=roomStats(r);
+      w.columns=[{width:7},{width:22},{width:9},{width:28},{width:11},{width:9},{width:11},{width:9},{width:8},{width:8},{width:26}];
+      w.getCell("A1").value=r.name||"Untitled room"; w.getCell("A1").font={bold:true,size:14,color:{argb:"FF0E6A5A"}};
+      w.getCell("A2").value=`Room type: ${s.c.n} · JIS ${s.c.lo}–${s.c.hi} lx (Em ${s.c.em}) · OSHA min ${oshaLux(s.c.osha)} lx${s.area?` · floor area ${fmt(s.area,1)} m²`:""}`; w.getCell("A2").font={color:{argb:"FF5A6B65"}};
+      const h=w.getRow(4); h.values=["Spot","Location / task","Lux","JIS type","JIS range","JIS","OSHA min","OSHA","x (m)","y (m)","Note"]; headRow(h);
+      let k=5; r.points.forEach((p,j)=>{ const e=spotEval(r,p), row=w.getRow(k++); row.values=[j+1,spotLoc(r,p),hasLux(p.lux)?+p.lux:null,e.c.n,`${e.c.lo}–${e.c.hi}`,dash(e.jis),e.omin,dash(e.osha),...posM(r,p),p.note||""]; body(row); tint(row.getCell(6),e.jis); tint(row.getCell(8),e.osha); });
+      const last=k-1; k++;
+      const stat=(lab,f,v,t)=>{ w.getCell(k,1).value=lab; w.mergeCells(k,1,k,2); w.getCell(k,1).font={bold:true}; w.getCell(k,3).value=f&&s.n?{formula:f,result:v}:v; if(t) tint(w.getCell(k,3),t); k++; };
+      stat("Readings",null,s.n); stat("Average (lx)",`ROUND(AVERAGE(C5:C${last}),0)`,s.n?Math.round(s.avg):null); stat("Minimum (lx)",`MIN(C5:C${last})`,s.min); stat("Maximum (lx)",`MAX(C5:C${last})`,s.max);
+      stat("Uniformity Uo",`ROUND(MIN(C5:C${last})/AVERAGE(C5:C${last}),2)`,s.n?+s.uo.toFixed(2):null); stat("Floor area (m²)",null,s.area?+s.area.toFixed(1):"–");
+      stat("Spots within JIS range",null,s.n?`${s.good}/${s.n}`:"–"); stat("Spots passing OSHA",null,s.n?`${s.pass}/${s.n}`:"–",s.n?(s.fail?"Fail":"Pass"):null);
+      { const zs=zoneStats(r), others=r.shapes.filter(q=>q.t!=="text"&&!isZone(q)&&((q.name&&q.name.trim())||q.note));
+        if(zs.length||others.length){ k++; w.getCell(k,1).value="Named areas & items"; w.getCell(k,1).font={bold:true,size:12,color:{argb:"FF0E6A5A"}}; k++;
+          const ah=w.getRow(k++); ah.values=["#","Area / item","Spots","JIS type","JIS range","Avg (lx)","OSHA min","JIS","Notes"]; headRow(ah);
+          zs.forEach((q,qi)=>{ const row=w.getRow(k++); row.values=[qi+1,q.z.name,q.n,q.c.n+(q.auto?" (room type)":""),`${q.c.lo}–${q.c.hi}`,q.n?Math.round(q.avg):null,oshaLux(q.c.osha),dash(q.rating),q.z.note||""]; body(row); tint(row.getCell(8),q.rating); row.getCell(9).alignment={wrapText:true,vertical:"top"}; });
+          others.forEach((q,qi)=>{ const row=w.getRow(k++); row.values=[zs.length+qi+1,(q.name&&q.name.trim())||"—","–",NAMES[q.t==="stamp"?q.k:q.t]||"Item","","",null,"",q.note||""]; body(row); row.getCell(9).alignment={wrapText:true,vertical:"top"}; }); } }
+      const sk=await sketchPNG(r), skW=Math.min(760,Math.round(560*sk.w/sk.h)), skH=Math.round(skW*sk.h/sk.w);
+      w.addImage(wb.addImage({base64:sk.url,extension:"png"}),{tl:{col:12,row:3},ext:{width:skW,height:skH}});
+      if(r.points.length) w.addImage(wb.addImage({base64:roomChartPNG(r),extension:"png"}),{tl:{col:12,row:3+Math.ceil(skH/20)+1},ext:{width:760,height:304}});
+    }
+    const buf=await wb.xlsx.writeBuffer(); await saveFile(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),fileBase()+".xlsx");
+  }catch(err){ console.error(err); toast("Excel workbook could not be built: "+err.message); }
+  btn.disabled=false;
+};
+
+/* ===================== START ===================== */
+bindProject(); resize(); loadRoom(); setTool("spot");
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>draw());
+window.addEventListener("resize",()=>{ closeTray(); });
+</script>
+
+</body>
+</html>
