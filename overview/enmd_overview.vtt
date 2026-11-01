@@ -1,0 +1,246 @@
+WEBVTT
+
+1
+00:00:02.400 --> 00:00:07.076
+This is the EnMD Digital Platform,
+from the Energy Management
+
+2
+00:00:07.076 --> 00:00:11.979
+Division of the National Cleaner
+Production Centre, Sri Lanka.
+
+3
+00:00:12.329 --> 00:00:15.794
+Every energy audit tool the
+division uses, in
+
+4
+00:00:15.794 --> 00:00:19.562
+one website, on your
+computer, tablet or phone.
+
+5
+00:00:21.100 --> 00:00:26.477
+Open it in any browser. On a phone, the
+same pages fit the small screen.
+
+6
+00:00:28.033 --> 00:00:32.165
+Press Get started, and type the
+four digit access code. It
+
+7
+00:00:32.165 --> 00:00:36.802
+is asked once each time you open the
+platform in a browser tab.
+
+8
+00:00:38.367 --> 00:00:41.674
+The dashboard shows seven tools
+as coloured tiles.
+
+9
+00:00:42.024 --> 00:00:46.995
+Type in the search box to find one
+quickly, and tap a tile to open it.
+
+10
+00:00:48.533 --> 00:00:53.299
+The solar, compressor, boiler, air
+conditioning and ESO tools are
+
+11
+00:00:53.299 --> 00:00:58.582
+built from the division's own Excel
+workbooks, with the same formulas.
+
+12
+00:00:58.932 --> 00:01:04.735
+Change a highlighted box, and every result,
+chart and check updates straight away.
+
+13
+00:01:05.085 --> 00:01:09.539
+The calculations were checked against
+LibreOffice with many random
+
+14
+00:01:09.539 --> 00:01:14.345
+sets of inputs, and your values are
+saved on this device as you work.
+
+15
+00:01:15.900 --> 00:01:20.832
+Inputs that matter most carry an orange
+Critical badge. A ten percent
+
+16
+00:01:20.832 --> 00:01:25.629
+change in one of them moves a key
+result by five percent or more.
+
+17
+00:01:25.979 --> 00:01:30.438
+Tap the badge to see which result it
+changes, and by how much.
+
+18
+00:01:32.000 --> 00:01:35.038
+The checks panel shows the
+workbook's own model
+
+19
+00:01:35.038 --> 00:01:38.550
+checks. A green tick means
+everything is consistent.
+
+20
+00:01:40.100 --> 00:01:43.898
+When you finish, use the Download
+group at the top right.
+
+21
+00:01:44.248 --> 00:01:48.510
+Word makes a complete report, with a
+cover page, summary, your
+
+22
+00:01:48.510 --> 00:01:53.059
+inputs, every result, the checks,
+charts and a sign-off section.
+
+23
+00:01:53.409 --> 00:01:57.549
+Excel gives back the filled
+workbook, with all its formulas.
+
+24
+00:01:59.100 --> 00:02:06.069
+LuxLog is the lighting survey app. Sketch
+each area, place the measured lux at
+
+25
+00:02:06.069 --> 00:02:13.991
+each spot, and every reading is rated against the
+JIS Z9110 range and the OSHA minimum.
+
+26
+00:02:14.341 --> 00:02:18.801
+View the building in 3D, and make
+Word and Excel reports.
+
+27
+00:02:20.467 --> 00:02:24.852
+The rooftop solar tool sizes the
+system from the roof and the
+
+28
+00:02:24.852 --> 00:02:29.747
+district, with sunshine data calibrated
+to the Global Solar Atlas.
+
+29
+00:02:30.097 --> 00:02:33.641
+It builds a cash flow of up to
+30 years, with net
+
+30
+00:02:33.641 --> 00:02:37.479
+present value, payback, and
+seventeen model checks.
+
+31
+00:02:39.033 --> 00:02:43.226
+The sub-meter tool checks site meters
+against a reference logger.
+
+32
+00:02:43.226 --> 00:02:47.375
+The units and the error of every
+meter are worked out for you.
+
+33
+00:02:47.725 --> 00:02:51.534
+Add photos and a signature, and
+the Word report comes
+
+34
+00:02:51.534 --> 00:02:56.067
+out in the division's template,
+exactly like the Excel macro.
+
+35
+00:02:57.633 --> 00:03:02.041
+The Smart ESO Sheet lists every
+energy saving opportunity,
+
+36
+00:03:02.041 --> 00:03:05.762
+one row per measure, just
+like the Excel sheet.
+
+37
+00:03:06.112 --> 00:03:11.362
+Cost and greenhouse gas savings use
+current prices and IPCC
+
+38
+00:03:11.362 --> 00:03:17.206
+2006 factors, and the Word export
+matches the sheet's own table.
+
+39
+00:03:18.767 --> 00:03:22.996
+The compressor tool compares the
+existing machine with a new one
+
+40
+00:03:22.996 --> 00:03:27.706
+at the same air demand, with pressure
+correction and part load power.
+
+41
+00:03:29.267 --> 00:03:33.936
+The boiler tool finds the efficiency by
+the indirect heat loss method,
+
+42
+00:03:33.936 --> 00:03:39.422
+and assesses five measures, with their
+interaction and a safe stack temperature.
+
+43
+00:03:40.967 --> 00:03:45.337
+The air conditioning tool compares
+six system types against
+
+44
+00:03:45.337 --> 00:03:50.525
+the existing non inverter units, in
+energy, cost and carbon dioxide.
+
+45
+00:03:52.067 --> 00:03:55.808
+Your work stays on your device.
+In the sub-meter tool,
+
+46
+00:03:55.808 --> 00:03:59.491
+Backup and Restore move an
+audit to another device.
+
+47
+00:04:01.133 --> 00:04:05.239
+The EnMD Digital Platform.
+Developed by Vihindu
+
+48
+00:04:05.239 --> 00:04:09.582
+Jayawardena, for the Energy
+Management Division.
+
+49
+00:04:09.932 --> 00:04:11.917
+Choose a tool, and
+begin.
