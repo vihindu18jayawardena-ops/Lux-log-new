@@ -46,201 +46,351 @@ Type in the search box to find one
 quickly, and tap a tile to open it.
 
 10
-00:00:48.533 --> 00:00:53.299
-The solar, compressor, boiler, air
-conditioning and ESO tools are
+00:00:48.533 --> 00:00:51.521
+First, LuxLog, the
+lighting survey app.
 
 11
-00:00:53.299 --> 00:00:58.582
-built from the division's own Excel
-workbooks, with the same formulas.
+00:00:51.871 --> 00:00:54.939
+It opens with an example
+hospital survey, so
 
 12
-00:00:58.932 --> 00:01:04.735
+00:00:54.939 --> 00:00:58.506
+you can try every tool before
+you start your own.
+
+13
+00:00:58.856 --> 00:01:03.368
+On the Project tab, type the site, the
+survey date, who surveyed,
+
+14
+00:01:03.368 --> 00:01:08.307
+and the lux meter used. Press Start my
+own survey when you are ready.
+
+15
+00:01:09.867 --> 00:01:14.305
+Each area you survey is a section, with
+its own sketch and readings.
+
+16
+00:01:14.655 --> 00:01:20.266
+LuxLog reads the section name and
+picks the room type,
+
+17
+00:01:20.266 --> 00:01:26.086
+here Kitchen, with its JIS Z9110
+range of 300 to 750 lux
+
+18
+00:01:26.086 --> 00:01:32.575
+and the OSHA minimum. You can also
+choose from 33 room types.
+
+19
+00:01:34.133 --> 00:01:38.591
+Sketch the room with walls, doors and
+windows, and place furniture,
+
+20
+00:01:38.591 --> 00:01:42.667
+light fittings, fans and air
+conditioners from the symbols.
+
+21
+00:01:43.017 --> 00:01:47.647
+On an Android phone, the camera room
+scan measures the room as
+
+22
+00:01:47.647 --> 00:01:52.425
+you tap each corner, and finds tables,
+chairs, beds and screens.
+
+23
+00:01:52.425 --> 00:01:57.802
+On an iPhone or a computer, type the room
+size or draw it on the grid.
+
+24
+00:01:58.152 --> 00:02:03.166
+The camera works only on your phone. No
+photos or video are uploaded.
+
+25
+00:02:04.700 --> 00:02:07.826
+Tap where you measured and
+type the lux from your
+
+26
+00:02:07.826 --> 00:02:11.293
+meter, or press Auto spots to
+place a grid of spots.
+
+27
+00:02:11.643 --> 00:02:14.909
+Mark an area, such as the
+cooking area, and the
+
+28
+00:02:14.909 --> 00:02:18.257
+spots inside it get that
+area's own lux level.
+
+29
+00:02:19.800 --> 00:02:24.675
+Every reading is rated at once: Low,
+Good or High against the
+
+30
+00:02:24.675 --> 00:02:30.019
+JIS range, and checked against the
+OSHA minimum as Pass or Below.
+
+31
+00:02:30.369 --> 00:02:35.053
+The panel shows the average, minimum,
+maximum and uniformity, and
+
+32
+00:02:35.053 --> 00:02:40.247
+the measurement log lists every reading,
+which you can open or delete.
+
+33
+00:02:41.800 --> 00:02:45.088
+The lux map shades the drawing
+between your spots,
+
+34
+00:02:45.088 --> 00:02:48.329
+so dark and bright areas
+stand out at a glance.
+
+35
+00:02:48.679 --> 00:02:51.825
+In the 3D tab, turn the room,
+walk through it,
+
+36
+00:02:51.825 --> 00:02:55.122
+and choose the view that goes
+into the report.
+
+37
+00:02:56.667 --> 00:03:01.339
+The Report tab sums up every
+section against the JIS range.
+
+38
+00:03:01.689 --> 00:03:08.035
+The Word report has the summary chart and,
+for each section, the sketch,
+
+39
+00:03:08.035 --> 00:03:13.852
+a 3D view, and a table of every spot
+with its JIS and OSHA result.
+
+40
+00:03:13.852 --> 00:03:20.613
+There is also an Excel workbook, and
+drawings export as SVG or AutoCAD DXF.
+
+41
+00:03:20.963 --> 00:03:24.624
+Your survey saves on the device
+as you work. Download
+
+42
+00:03:24.624 --> 00:03:28.366
+a backup to carry on with
+another phone or computer.
+
+43
+00:03:29.900 --> 00:03:35.395
+Next, the calculators. The solar,
+compressor, boiler, air conditioning and
+
+44
+00:03:35.395 --> 00:03:41.783
+ESO tools are built from the division's own
+Excel workbooks, with the same formulas.
+
+45
+00:03:42.133 --> 00:03:47.937
 Change a highlighted box, and every result,
 chart and check updates straight away.
 
-13
-00:01:05.085 --> 00:01:09.539
+46
+00:03:48.287 --> 00:03:52.740
 The calculations were checked against
 LibreOffice with many random
 
-14
-00:01:09.539 --> 00:01:14.345
+47
+00:03:52.740 --> 00:03:57.546
 sets of inputs, and your values are
 saved on this device as you work.
 
-15
-00:01:15.900 --> 00:01:20.832
+48
+00:03:59.100 --> 00:04:04.032
 Inputs that matter most carry an orange
 Critical badge. A ten percent
 
-16
-00:01:20.832 --> 00:01:25.629
+49
+00:04:04.032 --> 00:04:08.829
 change in one of them moves a key
 result by five percent or more.
 
-17
-00:01:25.979 --> 00:01:30.438
+50
+00:04:09.179 --> 00:04:13.638
 Tap the badge to see which result it
 changes, and by how much.
 
-18
-00:01:32.000 --> 00:01:35.038
+51
+00:04:15.200 --> 00:04:18.238
 The checks panel shows the
 workbook's own model
 
-19
-00:01:35.038 --> 00:01:38.550
+52
+00:04:18.238 --> 00:04:21.750
 checks. A green tick means
 everything is consistent.
 
-20
-00:01:40.100 --> 00:01:43.898
+53
+00:04:23.300 --> 00:04:27.098
 When you finish, use the Download
 group at the top right.
 
-21
-00:01:44.248 --> 00:01:48.510
+54
+00:04:27.448 --> 00:04:31.710
 Word makes a complete report, with a
 cover page, summary, your
 
-22
-00:01:48.510 --> 00:01:53.059
+55
+00:04:31.710 --> 00:04:36.259
 inputs, every result, the checks,
 charts and a sign-off section.
 
-23
-00:01:53.409 --> 00:01:57.549
+56
+00:04:36.609 --> 00:04:40.749
 Excel gives back the filled
 workbook, with all its formulas.
 
-24
-00:01:59.100 --> 00:02:06.069
-LuxLog is the lighting survey app. Sketch
-each area, place the measured lux at
-
-25
-00:02:06.069 --> 00:02:13.991
-each spot, and every reading is rated against the
-JIS Z9110 range and the OSHA minimum.
-
-26
-00:02:14.341 --> 00:02:18.801
-View the building in 3D, and make
-Word and Excel reports.
-
-27
-00:02:20.467 --> 00:02:24.852
+57
+00:04:42.300 --> 00:04:46.686
 The rooftop solar tool sizes the
 system from the roof and the
 
-28
-00:02:24.852 --> 00:02:29.747
+58
+00:04:46.686 --> 00:04:51.581
 district, with sunshine data calibrated
 to the Global Solar Atlas.
 
-29
-00:02:30.097 --> 00:02:33.641
+59
+00:04:51.931 --> 00:04:55.474
 It builds a cash flow of up to
 30 years, with net
 
-30
-00:02:33.641 --> 00:02:37.479
+60
+00:04:55.474 --> 00:04:59.313
 present value, payback, and
 seventeen model checks.
 
-31
-00:02:39.033 --> 00:02:43.226
+61
+00:05:00.867 --> 00:05:05.059
 The sub-meter tool checks site meters
 against a reference logger.
 
-32
-00:02:43.226 --> 00:02:47.375
+62
+00:05:05.059 --> 00:05:09.209
 The units and the error of every
 meter are worked out for you.
 
-33
-00:02:47.725 --> 00:02:51.534
+63
+00:05:09.559 --> 00:05:13.367
 Add photos and a signature, and
 the Word report comes
 
-34
-00:02:51.534 --> 00:02:56.067
+64
+00:05:13.367 --> 00:05:17.901
 out in the division's template,
 exactly like the Excel macro.
 
-35
-00:02:57.633 --> 00:03:02.041
+65
+00:05:19.467 --> 00:05:23.874
 The Smart ESO Sheet lists every
 energy saving opportunity,
 
-36
-00:03:02.041 --> 00:03:05.762
+66
+00:05:23.874 --> 00:05:27.595
 one row per measure, just
 like the Excel sheet.
 
-37
-00:03:06.112 --> 00:03:11.362
+67
+00:05:27.945 --> 00:05:33.195
 Cost and greenhouse gas savings use
 current prices and IPCC
 
-38
-00:03:11.362 --> 00:03:17.206
+68
+00:05:33.195 --> 00:05:39.039
 2006 factors, and the Word export
 matches the sheet's own table.
 
-39
-00:03:18.767 --> 00:03:22.996
+69
+00:05:40.600 --> 00:05:44.829
 The compressor tool compares the
 existing machine with a new one
 
-40
-00:03:22.996 --> 00:03:27.706
+70
+00:05:44.829 --> 00:05:49.539
 at the same air demand, with pressure
 correction and part load power.
 
-41
-00:03:29.267 --> 00:03:33.936
+71
+00:05:51.100 --> 00:05:55.769
 The boiler tool finds the efficiency by
 the indirect heat loss method,
 
-42
-00:03:33.936 --> 00:03:39.422
+72
+00:05:55.769 --> 00:06:01.255
 and assesses five measures, with their
 interaction and a safe stack temperature.
 
-43
-00:03:40.967 --> 00:03:45.337
+73
+00:06:02.800 --> 00:06:07.171
 The air conditioning tool compares
 six system types against
 
-44
-00:03:45.337 --> 00:03:50.525
+74
+00:06:07.171 --> 00:06:12.358
 the existing non inverter units, in
 energy, cost and carbon dioxide.
 
-45
-00:03:52.067 --> 00:03:55.808
+75
+00:06:13.900 --> 00:06:17.641
 Your work stays on your device.
 In the sub-meter tool,
 
-46
-00:03:55.808 --> 00:03:59.491
+76
+00:06:17.641 --> 00:06:21.325
 Backup and Restore move an
 audit to another device.
 
-47
-00:04:01.133 --> 00:04:05.239
+77
+00:06:22.967 --> 00:06:27.072
 The EnMD Digital Platform.
 Developed by Vihindu
 
-48
-00:04:05.239 --> 00:04:09.582
+78
+00:06:27.072 --> 00:06:31.415
 Jayawardena, for the Energy
 Management Division.
 
-49
-00:04:09.932 --> 00:04:11.917
+79
+00:06:31.765 --> 00:06:33.750
 Choose a tool, and
 begin.
