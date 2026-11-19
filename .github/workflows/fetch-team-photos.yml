@@ -1,0 +1,31 @@
+name: Fetch team photos
+on:
+  push:
+    paths: ['.github/workflows/fetch-team-photos.yml']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download profile photos from the NCPC website
+        run: |
+          set -e
+          mkdir -p team
+          U=https://www.ncpcsrilanka.org/wp-content/uploads
+          get(){ curl -fsSL -A "Mozilla/5.0" -o "team/$1.webp" "$U/$2"; file "team/$1.webp"; }
+          get sk 2019/02/1.-Eng.-Samantha-Kumarasena-1-826x1024.webp
+          get rw 2019/02/1.-Eng.-Samantha-Kumarasena-2-825x1024.webp
+          get mm 2019/02/1.-Eng.-Samantha-Kumarasena-8-825x1024.webp
+          get ah 2023/09/1.-Eng.-Samantha-Kumarasena-19-825x1024.webp
+          get kg 2023/09/1.-Eng.-Samantha-Kumarasena-20-825x1024.webp
+          get vj 2026/02/1.-Eng.-Samantha-Kumarasena-25-826x1024.webp
+          get pw 2026/02/1.-Eng.-Samantha-Kumarasena-27-826x1024.webp
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add team
+          git commit -m "Add team profile photos from the NCPC website" || echo nothing
+          git push
